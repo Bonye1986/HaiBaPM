@@ -34,3 +34,9 @@
   - Increased input prefix and suffix icons from 15px to 17px.
   - Increased the notice outline icon from 18px to 20px.
   - Slightly deepened the input icon color for better presence.
+- Added the PC workbench dashboard page from `工作台.png` as a Vue + Arco Design Vue frontend page.
+- Preserved the login page as `src/pages/LoginPage.vue` and switched the app entry to the workbench page.
+- Implemented the workbench sidebar, top search/actions, greeting block, metrics, trend chart, todo list, warnings, activity feed, and shortcut grid with Arco components plus scoped CSS/SVG.
+- Matched the PC reference canvas at `1536x1024`, keeping the current scope desktop-only.
+- Updated the browser title to `项目管理系统 - 工作台`.
+- Verified the workbench page at `1536x1024`; no horizontal overflow or bottom clipping observed.
