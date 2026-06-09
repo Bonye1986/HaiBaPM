@@ -26,3 +26,7 @@
   - Lightened description text weight and reduced vertical spacing.
   - Reduced input/button shadows and notice block padding for a more refined look.
 - Updated the internal-use notice copy from `请联系系统管理员` to `请联系管理员`.
+- Refined the PC form icon style:
+  - Replaced the filled notice info icon with a lighter outline icon.
+  - Reduced input prefix and suffix icons to 15px.
+  - Unified icon color and spacing across inputs and notice block.

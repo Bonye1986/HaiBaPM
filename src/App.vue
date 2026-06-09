@@ -2,7 +2,7 @@
 import { reactive } from 'vue';
 import {
   IconEyeInvisible,
-  IconInfoCircleFill,
+  IconInfoCircle,
   IconLock,
   IconUser,
 } from '@arco-design/web-vue/es/icon';
@@ -78,7 +78,7 @@ const form = reactive({
 
           <a-alert type="info" class="notice" :show-icon="false">
             <div class="notice-content">
-              <icon-info-circle-fill class="notice-icon" />
+              <icon-info-circle class="notice-icon" />
               <p>项目管理系统为公司内部使用系统<br />账号由管理员统一创建，如需使用请联系管理员</p>
             </div>
           </a-alert>
@@ -313,8 +313,8 @@ const form = reactive({
 
 .login-input :deep(.arco-input-prefix),
 .login-input :deep(.arco-input-suffix) {
-  color: #667397;
-  font-size: 16px;
+  color: #7a88a8;
+  font-size: 15px;
 }
 
 .login-input :deep(.arco-input-prefix) {
@@ -326,8 +326,8 @@ const form = reactive({
 }
 
 .login-input :deep(.arco-icon) {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   stroke-width: 1.8;
 }
 
@@ -387,15 +387,15 @@ const form = reactive({
 
 .notice-content {
   display: grid;
-  grid-template-columns: 22px auto;
-  column-gap: 12px;
+  grid-template-columns: 20px auto;
+  column-gap: 11px;
   padding: 15px 20px 14px;
 }
 
 .notice-icon {
-  width: 20px;
-  height: 20px;
-  margin-top: 4px;
+  width: 18px;
+  height: 18px;
+  margin-top: 5px;
   color: #2165ff;
 }
 
