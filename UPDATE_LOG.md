@@ -19,4 +19,9 @@
 - Updated footer copyright to `© 2026 湖南海拔科技 版权所有`.
 - Removed language switch, privacy policy, and service terms from the page.
 - Verified the PC page at `1200x880` and `1440x900`; no horizontal overflow observed.
-
+- Polished the PC form density after review:
+  - Reduced input height from 58px to 48px.
+  - Reduced button height from 52px to 48px.
+  - Narrowed the form from 406px to 386px.
+  - Lightened description text weight and reduced vertical spacing.
+  - Reduced input/button shadows and notice block padding for a more refined look.

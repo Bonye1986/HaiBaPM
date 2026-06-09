@@ -248,20 +248,20 @@ const form = reactive({
   align-items: center;
   justify-items: center;
   min-height: 620px;
-  padding: clamp(46px, 6.2vh, 72px) clamp(36px, 4.2vw, 54px) clamp(38px, 5.6vh, 64px);
+  padding: clamp(44px, 5.8vh, 68px) clamp(36px, 4.2vw, 54px) clamp(38px, 5.2vh, 60px);
   background:
     radial-gradient(circle at 43% 20%, rgba(240, 245, 255, .76), transparent 34%),
     linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
 }
 
 .login-form {
-  width: min(406px, 100%);
+  width: min(386px, 100%);
 }
 
 .login-title {
   margin: 0;
   text-align: center;
-  font-size: clamp(30px, 2.55vw, 36px);
+  font-size: clamp(29px, 2.35vw, 34px);
   line-height: 1.18;
   font-weight: 800;
   letter-spacing: 0;
@@ -269,16 +269,16 @@ const form = reactive({
 }
 
 .login-desc {
-  margin: 14px 0 clamp(30px, 5vh, 48px);
+  margin: 12px 0 clamp(26px, 4.2vh, 38px);
   text-align: center;
-  font-size: clamp(16px, 1.35vw, 18px);
+  font-size: clamp(15px, 1.25vw, 16px);
   line-height: 1.4;
-  font-weight: 600;
+  font-weight: 500;
   color: #647192;
 }
 
 .form-item {
-  margin-bottom: clamp(18px, 2.4vh, 24px);
+  margin-bottom: clamp(16px, 2vh, 20px);
 }
 
 .login-input {
@@ -286,11 +286,11 @@ const form = reactive({
 }
 
 .login-input {
-  height: 58px;
+  height: 48px;
   border: 1px solid #dce3f0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: #fff;
-  box-shadow: 0 8px 18px rgba(55, 82, 125, .03);
+  box-shadow: 0 6px 14px rgba(55, 82, 125, .025);
 }
 
 .login-input :deep(.arco-input-wrapper) {
@@ -301,7 +301,7 @@ const form = reactive({
 .login-input :deep(.arco-input),
 .login-input :deep(input) {
   color: #1d2a54;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
 }
 
@@ -335,14 +335,14 @@ const form = reactive({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 2px 0 clamp(22px, 3vh, 28px);
-  font-size: 16px;
+  margin: 0 0 clamp(20px, 2.8vh, 24px);
+  font-size: 15px;
   font-weight: 500;
 }
 
 .remember {
   color: #435077;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .remember :deep(.arco-checkbox-icon) {
@@ -363,18 +363,18 @@ const form = reactive({
 }
 
 .submit {
-  height: 52px;
-  border-radius: 7px;
+  height: 48px;
+  border-radius: 6px;
   background: linear-gradient(90deg, #1e63fb 0%, #245cff 100%);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
-  box-shadow: 0 10px 20px rgba(30, 96, 252, .18);
+  box-shadow: 0 8px 18px rgba(30, 96, 252, .15);
 }
 
 .notice {
   width: 100%;
-  min-height: 88px;
-  margin-top: clamp(24px, 3.4vh, 32px);
+  min-height: 76px;
+  margin-top: clamp(22px, 3vh, 28px);
   padding: 0;
   border: 0;
   border-radius: 7px;
@@ -389,7 +389,7 @@ const form = reactive({
   display: grid;
   grid-template-columns: 22px auto;
   column-gap: 12px;
-  padding: 18px 22px 16px;
+  padding: 15px 20px 14px;
 }
 
 .notice-icon {
@@ -402,8 +402,8 @@ const form = reactive({
 .notice p {
   margin: 0;
   color: #35436a;
-  font-size: clamp(14px, 1.12vw, 15px);
-  line-height: 1.7;
+  font-size: 14px;
+  line-height: 1.62;
   font-weight: 600;
 }
 
