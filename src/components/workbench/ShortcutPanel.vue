@@ -87,4 +87,14 @@ defineProps({
   color: #7b879d;
   font-size: 12px;
 }
+
+@media (max-width: 1360px) {
+  .shortcut-panel {
+    height: 344px;
+  }
+
+  .shortcut-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 </style>

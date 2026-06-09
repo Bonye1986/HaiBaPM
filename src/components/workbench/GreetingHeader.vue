@@ -56,4 +56,14 @@ import {
   font-weight: 700;
   box-shadow: 0 14px 24px rgba(31, 96, 255, .22);
 }
+
+@media (max-width: 1360px) {
+  .greeting h2 {
+    font-size: 28px;
+  }
+
+  .create-button {
+    width: 132px;
+  }
+}
 </style>

@@ -109,4 +109,21 @@ defineProps({
 .activity-list a {
   color: #2268f3;
 }
+
+@media (max-width: 1360px) {
+  .activity-panel {
+    height: 344px;
+  }
+
+  .activity-list li {
+    grid-template-columns: 70px 28px minmax(0, 1fr);
+    min-height: 43px;
+    height: auto;
+    padding: 8px 0;
+  }
+
+  .activity-list :deep(.arco-tag) {
+    display: none;
+  }
+}
 </style>

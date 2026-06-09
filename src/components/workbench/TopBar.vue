@@ -96,4 +96,28 @@ import {
 .down-icon {
   color: #111b33;
 }
+
+@media (max-width: 1440px) {
+  .topbar {
+    gap: 28px;
+  }
+
+  .search-input {
+    width: 380px;
+  }
+}
+
+@media (max-width: 1360px) {
+  .topbar {
+    gap: 22px;
+  }
+
+  .search-input {
+    width: 360px;
+  }
+
+  .top-actions {
+    gap: 14px;
+  }
+}
 </style>

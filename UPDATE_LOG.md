@@ -45,3 +45,10 @@
   - Extracted sidebar, topbar, greeting header, metric card, tone icon, trend, todo, warning, activity, and shortcut panels into `src/components/workbench/`.
   - Converted list-style data from positional arrays to named object fields where practical.
   - Kept `WorkbenchPage.vue` focused on page layout and component composition.
+- Improved PC desktop adaptation for the workbench page:
+  - Replaced the fixed `1536px` canvas with a full-width desktop layout and `1200px` minimum desktop width.
+  - Added desktop breakpoints for `1440px` and `1360px`.
+  - Reflowed metrics from six columns to three columns on narrower PC screens.
+  - Reflowed the dashboard from three columns to a two-column desktop layout at narrow PC widths.
+  - Tuned sidebar, topbar, greeting, activity, and shortcut panel spacing for desktop widths down to `1200px`.
+  - Verified `1536x1024`, `1366x900`, and `1200x880`; no horizontal overflow observed.

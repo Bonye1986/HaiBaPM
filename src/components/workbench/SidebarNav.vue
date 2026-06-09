@@ -152,4 +152,36 @@ defineProps({
   transform: rotate(-90deg);
   color: #7987a0;
 }
+
+@media (max-width: 1360px) {
+  .sidebar {
+    padding: 32px 16px 22px;
+  }
+
+  .brand {
+    grid-template-columns: 38px 1fr;
+    gap: 9px;
+  }
+
+  .brand img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .brand h1 {
+    font-size: 17px;
+  }
+
+  .nav-item {
+    height: 48px;
+    gap: 15px;
+    padding: 0 18px;
+  }
+
+  .ai-card {
+    left: 20px;
+    right: 18px;
+    bottom: 38px;
+  }
+}
 </style>

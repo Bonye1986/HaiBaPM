@@ -58,14 +58,15 @@ import {
 }
 
 :global(body) {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .workbench-page {
-  width: 1536px;
-  min-height: 1024px;
+  width: 100%;
+  min-width: 1200px;
+  min-height: 100vh;
   display: grid;
-  grid-template-columns: 234px 1fr;
+  grid-template-columns: clamp(210px, 15.24vw, 234px) minmax(0, 1fr);
   background:
     radial-gradient(circle at 72% 0%, rgba(218, 233, 255, .85), transparent 34%),
     linear-gradient(180deg, #f9fbff 0%, #f3f7ff 100%);
@@ -73,7 +74,8 @@ import {
 }
 
 .workspace {
-  padding: 24px 42px 24px 48px;
+  min-width: 0;
+  padding: 24px clamp(28px, 2.73vw, 42px) 24px clamp(32px, 3.13vw, 48px);
 }
 
 .metric-grid {
@@ -90,5 +92,39 @@ import {
     "chart tasks warnings"
     "activity shortcuts shortcuts";
   gap: 18px 20px;
+}
+
+@media (max-width: 1440px) {
+  .dashboard-grid {
+    grid-template-columns: 1.65fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  .metric-grid {
+    gap: 14px;
+  }
+}
+
+@media (max-width: 1360px) {
+  .workbench-page {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+
+  .workspace {
+    padding: 22px 28px 24px 32px;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 16px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "chart chart"
+      "tasks warnings"
+      "activity shortcuts";
+  }
 }
 </style>

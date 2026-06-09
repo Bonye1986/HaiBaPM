@@ -54,4 +54,15 @@ defineProps({
   margin-top: 8px;
   color: #6f7d95;
 }
+
+@media (max-width: 1440px) {
+  .metric-card :deep(.arco-card-body) {
+    gap: 13px;
+    padding: 16px 18px;
+  }
+
+  .metric-copy strong {
+    font-size: 24px;
+  }
+}
 </style>
