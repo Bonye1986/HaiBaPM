@@ -37,6 +37,7 @@ defineProps({
   width: 52px;
   height: 52px;
   border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .72), 0 12px 18px rgba(42, 96, 205, .1);
 }
 
 .tone-icon.compact {
@@ -48,6 +49,7 @@ defineProps({
 .tone-icon svg {
   width: 26px;
   height: 26px;
+  stroke-width: 3;
 }
 
 .tone-icon.compact svg {
@@ -64,12 +66,12 @@ defineProps({
   mask: radial-gradient(circle, transparent 47%, #000 49%);
 }
 
-.blue { color: #1f6bff; background: #eaf1ff; }
-.green { color: #2bbf8d; background: #e5f8ef; }
-.purple { color: #7c4dff; background: #f0e8ff; }
-.red { color: #f04452; background: #ffe9ec; }
+.blue { color: #1f6bff; background: radial-gradient(circle at 35% 24%, #f7fbff 0 8%, #e2ebff 38%, #d5e2ff 100%); }
+.green { color: #2bbf8d; background: radial-gradient(circle at 35% 24%, #f5fff9 0 8%, #d9f6e7 42%, #bff0d8 100%); }
+.purple { color: #7c4dff; background: radial-gradient(circle at 35% 24%, #fcf9ff 0 8%, #eadcff 42%, #dac5ff 100%); }
+.red { color: #f04452; background: radial-gradient(circle at 35% 24%, #fff9fb 0 8%, #ffd9df 42%, #ffc0ca 100%); }
 .mint,
-.cyan { color: #24c7a0; background: #e4f8f1; }
+.cyan { color: #24c7a0; background: radial-gradient(circle at 35% 24%, #f5fffb 0 8%, #d6f6eb 42%, #c3efdf 100%); }
 .orange { color: #f5a623; background: #fff2df; }
 .violet { color: #7a67f8; background: #eeeafd; }
 </style>

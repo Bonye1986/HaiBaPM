@@ -22,9 +22,9 @@ defineProps({
 
 <style scoped>
 .metric-card {
-  height: 116px;
+  height: 120px;
   border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(51, 82, 133, .08);
+  box-shadow: 0 10px 26px rgba(56, 84, 130, .065);
 }
 
 .metric-card :deep(.arco-card-body) {

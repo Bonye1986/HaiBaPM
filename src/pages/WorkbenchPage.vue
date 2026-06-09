@@ -35,6 +35,9 @@ import {
         <trend-panel :chart-series="chartSeries" />
         <todo-panel :items="todoItems" />
         <warning-panel :items="warningItems" />
+      </section>
+
+      <section class="dashboard-bottom-grid">
         <activity-panel :items="activityItems" />
         <shortcut-panel :items="shortcuts" />
       </section>
@@ -82,21 +85,31 @@ import {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .dashboard-grid {
   display: grid;
   grid-template-columns: 2fr 1.08fr 1.08fr;
   grid-template-areas:
-    "chart tasks warnings"
-    "activity shortcuts shortcuts";
+    "chart tasks warnings";
   gap: 18px 20px;
+  margin-bottom: 22px;
+}
+
+.dashboard-bottom-grid {
+  display: grid;
+  grid-template-columns: 1.09fr 1fr;
+  gap: 20px;
 }
 
 @media (max-width: 1440px) {
   .dashboard-grid {
     grid-template-columns: 1.65fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  .dashboard-bottom-grid {
     gap: 16px;
   }
 
@@ -123,8 +136,11 @@ import {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "chart chart"
-      "tasks warnings"
-      "activity shortcuts";
+      "tasks warnings";
+  }
+
+  .dashboard-bottom-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

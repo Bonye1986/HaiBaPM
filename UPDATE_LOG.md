@@ -52,3 +52,10 @@
   - Reflowed the dashboard from three columns to a two-column desktop layout at narrow PC widths.
   - Tuned sidebar, topbar, greeting, activity, and shortcut panel spacing for desktop widths down to `1200px`.
   - Verified `1536x1024`, `1366x900`, and `1200x880`; no horizontal overflow observed.
+- Continued visual optimization against `工作台.png`:
+  - Split the dashboard into independent upper and lower grids so the activity and shortcut panels match the reference proportions more closely.
+  - Replaced the hard-square logo asset in the sidebar with a DOM-rendered four-petal brand mark.
+  - Strengthened metric icon treatments with richer radial backgrounds and heavier icon strokes.
+  - Added data-point markers to the trend chart.
+  - Refined card shadow softness and restored metric/bottom panel heights closer to the reference design.
+  - Re-verified `1536x1024` and `1200x880`; no horizontal overflow or 1024-height clipping observed.

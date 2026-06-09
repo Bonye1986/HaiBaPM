@@ -15,7 +15,12 @@ defineProps({
 <template>
   <aside class="sidebar">
     <div class="brand">
-      <img src="/assets/logo-mark.png" alt="" />
+      <span class="brand-mark" aria-hidden="true">
+        <i class="mark-leaf leaf-a"></i>
+        <i class="mark-leaf leaf-b"></i>
+        <i class="mark-leaf leaf-c"></i>
+        <i class="mark-leaf leaf-d"></i>
+      </span>
       <div>
         <h1>项目管理系统</h1>
         <p>Project Management System</p>
@@ -58,9 +63,52 @@ defineProps({
   margin: 0 0 34px;
 }
 
-.brand img {
-  width: 40px;
+.brand-mark {
+  position: relative;
+  display: block;
+  width: 42px;
   height: 40px;
+}
+
+.mark-leaf {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 16px 16px 16px 4px;
+  border: 1px solid rgba(255, 255, 255, .42);
+  box-shadow: 0 8px 15px rgba(40, 98, 255, .16);
+}
+
+.leaf-a {
+  left: 1px;
+  top: 5px;
+  z-index: 3;
+  transform: rotate(-45deg);
+  background: linear-gradient(135deg, #34c0ff 0%, #3867f5 82%);
+}
+
+.leaf-b {
+  left: 16px;
+  top: 2px;
+  z-index: 4;
+  transform: rotate(41deg);
+  background: linear-gradient(135deg, #48b8ff 0%, #6541ff 86%);
+}
+
+.leaf-c {
+  left: 3px;
+  top: 19px;
+  z-index: 2;
+  transform: rotate(-136deg);
+  background: linear-gradient(135deg, #4d7aff 0%, #4636ee 84%);
+}
+
+.leaf-d {
+  left: 17px;
+  top: 18px;
+  z-index: 1;
+  transform: rotate(132deg);
+  background: linear-gradient(135deg, #6557ff 0%, #25b4ff 92%);
 }
 
 .brand h1 {
@@ -163,9 +211,14 @@ defineProps({
     gap: 9px;
   }
 
-  .brand img {
+  .brand-mark {
     width: 36px;
     height: 36px;
+  }
+
+  .mark-leaf {
+    width: 21px;
+    height: 21px;
   }
 
   .brand h1 {

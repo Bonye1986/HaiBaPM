@@ -1,10 +1,20 @@
 <script setup>
-defineProps({
+import { computed } from 'vue';
+
+const props = defineProps({
   chartSeries: {
     type: Array,
     required: true,
   },
 });
+
+const drawableSeries = computed(() => props.chartSeries.map((series) => ({
+  ...series,
+  dots: series.points.split(' ').map((point) => {
+    const [x, y] = point.split(',').map(Number);
+    return { x: x + 34, y };
+  }),
+})));
 </script>
 
 <template>
@@ -33,7 +43,10 @@ defineProps({
         <text x="0" y="154">60</text>
         <text x="0" y="194">30</text>
       </g>
-      <polyline v-for="series in chartSeries" :key="series.color" :points="series.points" :stroke="series.color" />
+      <g v-for="series in drawableSeries" :key="series.color">
+        <polyline :points="series.points" :stroke="series.color" />
+        <circle v-for="dot in series.dots" :key="`${series.color}-${dot.x}-${dot.y}`" :cx="dot.x" :cy="dot.y" r="2.2" :fill="series.color" />
+      </g>
       <g class="x-labels">
         <text x="0" y="215">04-21</text>
         <text x="120" y="215">04-26</text>
@@ -49,7 +62,7 @@ defineProps({
 <style scoped>
 .panel {
   border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(51, 82, 133, .07);
+  box-shadow: 0 10px 26px rgba(56, 84, 130, .06);
 }
 
 .chart-panel {
@@ -103,7 +116,7 @@ defineProps({
 
 .trend-chart polyline {
   fill: none;
-  stroke-width: 3;
+  stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
   transform: translateX(34px);
