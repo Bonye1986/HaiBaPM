@@ -313,8 +313,8 @@ const form = reactive({
 
 .login-input :deep(.arco-input-prefix),
 .login-input :deep(.arco-input-suffix) {
-  color: #7a88a8;
-  font-size: 15px;
+  color: #66779d;
+  font-size: 17px;
 }
 
 .login-input :deep(.arco-input-prefix) {
@@ -326,8 +326,8 @@ const form = reactive({
 }
 
 .login-input :deep(.arco-icon) {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
   stroke-width: 1.8;
 }
 
@@ -387,15 +387,15 @@ const form = reactive({
 
 .notice-content {
   display: grid;
-  grid-template-columns: 20px auto;
-  column-gap: 11px;
+  grid-template-columns: 22px auto;
+  column-gap: 12px;
   padding: 15px 20px 14px;
 }
 
 .notice-icon {
-  width: 18px;
-  height: 18px;
-  margin-top: 5px;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
   color: #2165ff;
 }
 

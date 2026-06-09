@@ -30,3 +30,7 @@
   - Replaced the filled notice info icon with a lighter outline icon.
   - Reduced input prefix and suffix icons to 15px.
   - Unified icon color and spacing across inputs and notice block.
+- Rebalanced the PC form icon weight after review:
+  - Increased input prefix and suffix icons from 15px to 17px.
+  - Increased the notice outline icon from 18px to 20px.
+  - Slightly deepened the input icon color for better presence.
