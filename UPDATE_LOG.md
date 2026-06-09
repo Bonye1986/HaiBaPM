@@ -25,3 +25,4 @@
   - Narrowed the form from 406px to 386px.
   - Lightened description text weight and reduced vertical spacing.
   - Reduced input/button shadows and notice block padding for a more refined look.
+- Updated the internal-use notice copy from `请联系系统管理员` to `请联系管理员`.

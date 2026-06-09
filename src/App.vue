@@ -79,7 +79,7 @@ const form = reactive({
           <a-alert type="info" class="notice" :show-icon="false">
             <div class="notice-content">
               <icon-info-circle-fill class="notice-icon" />
-              <p>项目管理系统为公司内部使用系统<br />账号由管理员统一创建，如需使用请联系系统管理员</p>
+              <p>项目管理系统为公司内部使用系统<br />账号由管理员统一创建，如需使用请联系管理员</p>
             </div>
           </a-alert>
         </a-form>
