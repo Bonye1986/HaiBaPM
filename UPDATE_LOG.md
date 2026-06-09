@@ -40,3 +40,8 @@
 - Matched the PC reference canvas at `1536x1024`, keeping the current scope desktop-only.
 - Updated the browser title to `项目管理系统 - 工作台`.
 - Verified the workbench page at `1536x1024`; no horizontal overflow or bottom clipping observed.
+- Refactored the workbench page for maintainability:
+  - Moved workbench mock data to `src/data/workbench.js`.
+  - Extracted sidebar, topbar, greeting header, metric card, tone icon, trend, todo, warning, activity, and shortcut panels into `src/components/workbench/`.
+  - Converted list-style data from positional arrays to named object fields where practical.
+  - Kept `WorkbenchPage.vue` focused on page layout and component composition.

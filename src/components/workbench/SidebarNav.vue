@@ -1,0 +1,155 @@
+<script setup>
+import {
+  IconDown,
+  IconRobot,
+} from '@arco-design/web-vue/es/icon';
+
+defineProps({
+  navItems: {
+    type: Array,
+    required: true,
+  },
+});
+</script>
+
+<template>
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="/assets/logo-mark.png" alt="" />
+      <div>
+        <h1>项目管理系统</h1>
+        <p>Project Management System</p>
+      </div>
+    </div>
+
+    <nav class="nav-list" aria-label="主导航">
+      <button v-for="item in navItems" :key="item.label" class="nav-item" :class="{ active: item.active }">
+        <component :is="item.icon" />
+        <span>{{ item.label }}</span>
+      </button>
+    </nav>
+
+    <div class="ai-card">
+      <span class="ai-icon"><icon-robot /></span>
+      <div>
+        <strong>AI 助手</strong>
+        <p>智能分析 · 风险预警</p>
+      </div>
+      <icon-down class="ai-arrow" />
+    </div>
+  </aside>
+</template>
+
+<style scoped>
+.sidebar {
+  position: relative;
+  margin: 0;
+  padding: 35px 20px 24px;
+  background: rgba(255, 255, 255, .76);
+  border-right: 1px solid rgba(216, 226, 241, .72);
+  box-shadow: 14px 0 40px rgba(70, 98, 140, .06);
+}
+
+.brand {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 34px;
+}
+
+.brand img {
+  width: 40px;
+  height: 40px;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.1;
+  font-weight: 800;
+  color: #101b35;
+}
+
+.brand p {
+  margin: 8px 0 0;
+  font-size: 10px;
+  color: #5f6f8d;
+}
+
+.nav-list {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-item {
+  width: 100%;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #53627c;
+  font-size: 15px;
+  text-align: left;
+}
+
+.nav-item svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 4;
+}
+
+.nav-item.active {
+  color: #1662f3;
+  background: linear-gradient(90deg, #eaf2ff 0%, #eef5ff 100%);
+  font-weight: 700;
+}
+
+.ai-card {
+  position: absolute;
+  left: 28px;
+  right: 22px;
+  bottom: 43px;
+  height: 88px;
+  display: grid;
+  grid-template-columns: 42px 1fr 14px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(45, 86, 150, .1);
+}
+
+.ai-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  color: #1f68ff;
+  background: #edf4ff;
+}
+
+.ai-card strong {
+  display: block;
+  font-size: 14px;
+  color: #17213a;
+}
+
+.ai-card p {
+  display: block;
+  margin: 6px 0 0;
+  color: #7b879d;
+  font-size: 12px;
+}
+
+.ai-arrow {
+  transform: rotate(-90deg);
+  color: #7987a0;
+}
+</style>
