@@ -1,0 +1,22 @@
+# Update Log
+
+## 2026-06-09
+
+- Converted the original static login page into a Vue 3 + Vite frontend project.
+- Added Arco Design Vue (`@arco-design/web-vue`) and rebuilt the login form with Arco form, input, checkbox, button, alert, and icon components.
+- Kept the current scope to the PC layout only; removed tablet and mobile responsive rules for now.
+- Refined the PC login panel proportions so the panel is more compact and polished.
+- Split the left brand area into editable frontend elements:
+  - Logo image: `public/assets/logo-mark.png`
+  - Brand text and positioning copy rendered as DOM text
+  - Illustration image: `public/assets/login-visual.png`
+  - Blue background rendered with CSS gradients
+- Removed the old full-panel background image so brand copy is no longer baked into a bitmap.
+- Tuned form icon proportions:
+  - Input icons to 16px
+  - Checkbox to 18px
+  - Notice icon to 20px
+- Updated footer copyright to `© 2026 湖南海拔科技 版权所有`.
+- Removed language switch, privacy policy, and service terms from the page.
+- Verified the PC page at `1200x880` and `1440x900`; no horizontal overflow observed.
+
