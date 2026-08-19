@@ -323,6 +323,10 @@ h1, h2, h3, p { margin: 0; }
 .phase-stat-grid strong, .phase-stat-grid span { display: block; }
 .phase-stat-grid strong { color: #1d2129; font-size: 20px; }
 .phase-stat-grid span { margin-top: 5px; color: #86909c; font-size: 10px; }
+.phase-stat-grid-secondary { margin-top: 8px; }
+.phase-stat-grid-secondary article { background: #fff; }
+.phase-stat-summary { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); color: #86909c; font-size: 11px; }
+.phase-stat-summary b { color: #1d2129; font-size: 14px; }
 .phase-stat-progress { margin-top: 20px; }
 .phase-stat-progress header { display: flex; justify-content: space-between; margin-bottom: 8px; color: #4e5969; font-size: 11px; }
 .phase-member-hours, .phase-file-list, .phase-member-list { display: flex; flex-direction: column; gap: 8px; }
