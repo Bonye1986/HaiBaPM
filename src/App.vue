@@ -17,6 +17,9 @@ const loginLoading = ref(false);
 const loginError = ref("");
 const socialLoginProvider = ref("");
 const loginDraft = ref({ account: "lixiangmu@haiba.example", password: "", remember: true });
+const passwordModalVisible = ref(false);
+const passwordError = ref("");
+const passwordDraft = ref({ currentPassword: "", newPassword: "", confirmPassword: "" });
 const statusOptions = ["全部状态", "未完成", "待确认", "已完成"];
 const taskStatusMap = { "未开始": "未完成", "进行中": "未完成", "延期": "未完成" };
 const selectedPhaseKey = ref("1500-01-01");
@@ -278,13 +281,40 @@ function handleLogout() {
       taskModalVisible.value = false;
       phaseMemberModalVisible.value = false;
       phaseFileModalVisible.value = false;
+      passwordModalVisible.value = false;
       helpVisible.value = false;
       isAuthenticated.value = false;
       loginError.value = "";
       loginDraft.value.password = "";
+      passwordError.value = "";
+      passwordDraft.value = { currentPassword: "", newPassword: "", confirmPassword: "" };
       Message.success("已退出登录");
     },
   });
+}
+function openPasswordModal() {
+  passwordDraft.value = { currentPassword: "", newPassword: "", confirmPassword: "" };
+  passwordError.value = "";
+  passwordModalVisible.value = true;
+}
+async function submitPasswordChange() {
+  const { currentPassword, newPassword, confirmPassword } = passwordDraft.value;
+  if (!currentPassword) { passwordError.value = "请输入当前密码"; return false; }
+  if (!newPassword) { passwordError.value = "请输入新密码"; return false; }
+  if (newPassword.length < 8) { passwordError.value = "新密码至少需要 8 个字符"; return false; }
+  if (newPassword === currentPassword) { passwordError.value = "新密码不能与当前密码相同"; return false; }
+  if (!confirmPassword) { passwordError.value = "请再次输入新密码"; return false; }
+  if (newPassword !== confirmPassword) { passwordError.value = "两次输入的新密码不一致"; return false; }
+  passwordError.value = "";
+  try {
+    await new Promise(resolve => window.setTimeout(resolve, 350));
+    passwordDraft.value = { currentPassword: "", newPassword: "", confirmPassword: "" };
+    Message.success("密码修改成功");
+    return true;
+  } catch {
+    passwordError.value = "密码修改失败，请稍后重试";
+    return false;
+  }
 }
 function openWorkspaceMore(key) {
   if (key === "import") {
@@ -1031,7 +1061,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <div class="header-actions">
         <a-tooltip content="帮助中心"><a-button type="text" @click="helpVisible = true"><IconQuestionCircle />帮助</a-button></a-tooltip>
         <a-dropdown trigger="click"><a-button type="text"><IconNotification />通知</a-button><template #content><div class="notification-panel"><header><strong>通知</strong><a-button type="text" size="mini">全部已读</a-button></header><button><IconClockCircle /><span><strong>任务即将逾期</strong><small>支付回调幂等校验将在 3 天后到期</small></span></button><button><IconCheckCircle /><span><strong>任务等待确认</strong><small>核对审核状态流转已提交确认</small></span></button><button><IconInfoCircle /><span><strong>期号进度更新</strong><small>一期核心交付进度已更新为 68%</small></span></button></div></template></a-dropdown>
-        <a-dropdown trigger="click"><button class="profile-trigger"><a-avatar :size="32">李</a-avatar><span><strong>李项目</strong><small>项目经理</small></span><IconDown /></button><template #content><a-menu class="account-menu"><div class="account-summary"><a-avatar :size="38">李</a-avatar><div><strong>李项目</strong><small>lixiangmu@haiba.example</small></div></div><a-menu-item key="profile" @click="notify('个人信息功能将在后续开放')"><IconUser />个人信息</a-menu-item><a-menu-item key="password" @click="notify('修改密码功能将在后续开放')"><IconLock />修改密码</a-menu-item><a-menu-item key="logout" @click="handleLogout"><IconPoweroff />退出登录</a-menu-item></a-menu></template></a-dropdown>
+        <a-dropdown trigger="click"><button class="profile-trigger"><a-avatar :size="32">李</a-avatar><span><strong>李项目</strong><small>项目经理</small></span><IconDown /></button><template #content><a-menu class="account-menu"><div class="account-summary"><a-avatar :size="38">李</a-avatar><div><strong>李项目</strong><small>lixiangmu@haiba.example</small></div></div><a-menu-item key="profile" @click="notify('个人信息功能将在后续开放')"><IconUser />个人信息</a-menu-item><a-menu-item key="password" @click="openPasswordModal"><IconLock />修改密码</a-menu-item><a-menu-item key="logout" @click="handleLogout"><IconPoweroff />退出登录</a-menu-item></a-menu></template></a-dropdown>
       </div>
     </header>
 
@@ -1057,6 +1087,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
     </div>
 
     <a-modal v-model:visible="taskModalVisible" title="新建任务" ok-text="创建任务" cancel-text="取消" :ok-button-props="{ disabled: !draft.title.trim() }" @ok="createTask"><div class="modal-context"><span>项目期号</span><strong>{{ selectedPhase.code }} {{ selectedPhase.projectName }}-{{ selectedPhase.name }}</strong></div><a-form layout="vertical"><a-form-item label="任务名称" required><a-input v-model="draft.title" autofocus placeholder="填写明确、可交付的任务名称" /></a-form-item><div class="form-grid"><a-form-item label="状态"><a-select v-model="draft.status"><a-option v-for="status in ['未完成', '待确认', '已完成']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="确认人"><a-select v-model="draft.confirmer"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item><a-form-item label="执行人"><a-select v-model="draft.executors" multiple :max-tag-count="2" placeholder="可选择多个执行人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item><a-form-item label="优先级"><a-select v-model="draft.priority"><a-option v-for="priority in ['P0', 'P1', 'P2']" :key="priority" :value="priority">{{ priority }}</a-option></a-select></a-form-item><a-form-item label="截止时间"><a-input v-model="draft.due" type="date" /></a-form-item></div><a-form-item label="任务描述"><RichTextEditor v-model="draft.description" placeholder="补充任务目标、验收标准、依赖或交付物" /></a-form-item><section class="subtask-builder"><header><strong>子任务</strong><span>{{ draft.subtasks.length }} 项</span></header><div class="subtask-add-row"><a-input v-model="subtaskDraft" placeholder="添加子任务名称" @keyup.enter="addSubtask" /><a-button type="outline" @click="addSubtask"><IconPlus />添加</a-button></div><div v-if="draft.subtasks.length" class="subtask-list"><div v-for="subtask in draft.subtasks" :key="subtask.id"><span><a-tag color="gray">未完成</a-tag>{{ subtask.title }}</span><a-button type="text" size="small" @click="removeSubtask(subtask)"><IconDelete /></a-button></div></div></section></a-form></a-modal>
+    <a-modal v-model:visible="passwordModalVisible" title="修改密码" ok-text="保存密码" cancel-text="取消" :on-before-ok="submitPasswordChange"><a-form layout="vertical" @submit.prevent="submitPasswordChange"><a-form-item label="当前密码" required><a-input-password v-model="passwordDraft.currentPassword" allow-clear autocomplete="current-password" placeholder="请输入当前密码" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><a-form-item label="新密码" required><a-input-password v-model="passwordDraft.newPassword" allow-clear autocomplete="new-password" placeholder="至少 8 个字符" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><a-form-item label="确认新密码" required><a-input-password v-model="passwordDraft.confirmPassword" allow-clear autocomplete="new-password" placeholder="请再次输入新密码" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><p v-if="passwordError" class="password-error" role="alert">{{ passwordError }}</p><p class="password-help"><IconInfoCircle />当前为演示环境，密码不会保存在浏览器本地。</p></a-form></a-modal>
     <a-modal v-model:visible="laneModalVisible" :title="laneEditingKey ? '编辑看板列' : '添加看板列'" ok-text="保存" cancel-text="取消" :ok-button-props="{ disabled: !laneDraft.title.trim() }" @ok="saveLane"><a-form layout="vertical"><a-form-item label="列名称" required><a-input v-model="laneDraft.title" maxlength="20" show-word-limit placeholder="例如：待客户确认" /></a-form-item><a-form-item label="列颜色"><a-select v-model="laneDraft.color"><a-option v-for="option in laneColorOptions" :key="option.value" :value="option.value">{{ option.label }}</a-option></a-select></a-form-item></a-form></a-modal>
 
     <a-drawer :visible="Boolean(selectedTask)" width="620px" @cancel="selectedTask = null"><template #title><div class="task-drawer-heading"><div v-if="taskTitleEditing" class="task-title-edit-row"><a-input v-model="taskTitleDraft" autofocus @keyup.enter="saveTaskTitle" @keyup.esc="cancelTaskTitleEdit" /><a-tooltip content="保存名称"><a-button type="text" size="small" aria-label="保存任务名称" @click="saveTaskTitle"><IconCheckCircle /></a-button></a-tooltip><a-tooltip content="取消编辑"><a-button type="text" size="small" aria-label="取消编辑任务名称" @click="cancelTaskTitleEdit"><IconClose /></a-button></a-tooltip></div><div v-else class="task-title-view-row"><strong>{{ selectedTask?.title || '任务详情' }}</strong><a-tooltip content="编辑任务名称"><a-button type="text" size="small" aria-label="编辑任务名称" @click="startTaskTitleEdit"><IconEdit /></a-button></a-tooltip></div></div></template><template v-if="selectedTask"><div class="task-drawer-actions"><a-select :model-value="selectedTask.status" style="width:148px" @change="value => updateTaskStatus(selectedTask.id, value)"><a-option v-for="status in statusOptions.slice(1)" :key="status" :value="status">{{ status }}</a-option></a-select><a-tag :color="priorityColors[selectedTask.priority]">{{ selectedTask.priority }} 优先级</a-tag></div><div class="task-drawer-meta"><span>确认人<b>{{ selectedTask.confirmer || selectedTask.owner }}</b></span><span>执行人<b>{{ (selectedTask.executors || [selectedTask.owner]).join('、') }}</b></span><span>计划时间<b>{{ selectedTask.start }} 至 {{ selectedTask.due }}</b></span><span>任务编号<b>{{ selectedTask.id }}</b></span></div><section class="drawer-section task-description-section"><header><strong>任务描述</strong></header><div v-if="selectedTask.description" class="rich-text-display" v-html="selectedTask.description" /><p v-else>暂无补充描述。</p></section><section class="drawer-section task-subtasks-section"><header><strong>子任务</strong><span>{{ selectedTask.subtasks?.length || 0 }} 项</span></header><div class="subtask-add-row task-drawer-subtask-add"><a-input v-model="subtaskDraft" placeholder="添加子任务名称" @keyup.enter="addTaskDrawerSubtask" /><a-button type="outline" aria-label="添加子任务" @click="addTaskDrawerSubtask"><IconPlus /></a-button></div><div v-if="selectedTask.subtasks?.length" class="task-subtask-list"><div v-for="subtask in selectedTask.subtasks" :key="subtask.id"><a-checkbox :model-value="subtask.status === '已完成'" @change="toggleSubtask(selectedTask.id, subtask)">{{ subtask.title }}</a-checkbox><span class="task-subtask-actions"><a-tag :color="phaseStatusColor(subtask.status)">{{ subtask.status }}</a-tag><a-button type="text" size="small" aria-label="移除子任务" @click="removeTaskDrawerSubtask(subtask)"><IconDelete /></a-button></span></div></div><p v-else class="task-subtasks-empty">暂无子任务，可在上方直接添加。</p></section><section class="drawer-section task-collaboration-section"><div class="task-collaboration-tabs"><button :class="{ active: taskCollaborationTab === 'comments' }" @click="taskCollaborationTab = 'comments'">评论与回复 <b>{{ selectedTaskComments.length }}</b></button><button :class="{ active: taskCollaborationTab === 'activities' }" @click="taskCollaborationTab = 'activities'">操作记录 <b>{{ selectedTaskActivities.length }}</b></button></div><div v-if="taskCollaborationTab === 'comments'"><div v-if="selectedTaskComments.length" class="task-comment-list"><article v-for="comment in selectedTaskComments" :key="comment.id" class="task-comment-item" :class="{ 'task-comment-reply': comment.parentId }"><div class="task-comment-heading"><span><a-avatar :size="24">{{ comment.author.slice(0, 1) }}</a-avatar><b>{{ comment.author }}</b></span><small>{{ comment.createdAt }}</small></div><div class="rich-text-display" v-html="comment.content" /><a-button type="text" size="small" @click="replyToComment(comment)">回复</a-button></article></div><a-empty v-else description="暂无评论" /><div class="task-comment-editor"><span v-if="replyingTo" class="replying-hint">回复 {{ replyingTo.author }}<a-button type="text" size="small" @click="replyingTo = null; commentDraft = ''">取消</a-button></span><RichTextEditor v-model="commentDraft" placeholder="写下评论或回复" /></div></div><div v-else><div v-if="selectedTaskActivities.length" class="task-activity-list"><div v-for="activity in selectedTaskActivities" :key="activity.id"><span><b>{{ activity.action }}</b><small>{{ activity.detail }}</small></span><em>{{ activity.operator }} · {{ activity.createdAt }}</em></div></div><a-empty v-else description="暂无操作记录" /></div></section></template><template #footer><div class="drawer-footer"><a-button @click="selectedTask = null">关闭</a-button><a-button :disabled="!commentText(commentDraft)" @click="addTaskComment">发表评论</a-button><template v-if="selectedTask?.status === '待确认'"><a-button @click="handleTaskConfirmation(false)">确认不通过</a-button><a-button type="primary" @click="handleTaskConfirmation(true)">确认通过</a-button></template><a-button v-else type="primary" @click="submitTaskResult">提交结果</a-button></div></template></a-drawer>
