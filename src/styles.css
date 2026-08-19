@@ -351,8 +351,8 @@ h1, h2, h3, p { margin: 0; }
 .phase-file-item > .arco-icon { flex: 0 0 auto; color: #165dff; font-size: 20px; }
 .phase-file-item > span, .phase-member-item > span { min-width: 0; flex: 1; }
 .phase-file-item b, .phase-member-item b { overflow: hidden; display: block; color: #4e5969; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.file-actions { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-.file-actions .arco-btn { margin: 0; }
+.file-actions { display: inline-flex; align-items: center; gap: 1px; flex: 0 0 auto; margin-left: auto; }
+.file-actions .arco-btn { width: 26px; min-width: 26px; margin: 0; padding: 0; }
 .phase-file-preview { min-height: 360px; display: flex; align-items: stretch; justify-content: center; }
 .phase-file-preview iframe { width: 100%; min-height: 520px; border: 0; }
 .phase-file-preview img { max-width: 100%; max-height: 520px; object-fit: contain; }
