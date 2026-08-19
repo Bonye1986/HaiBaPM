@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Message, Modal } from "@arco-design/web-vue";
 import {
   IconArrowRise, IconCalendar, IconCheckCircle, IconClockCircle, IconClose, IconCopy, IconDown, IconExport, IconFile,
@@ -92,6 +92,7 @@ const phaseWorklogs = ref({
 });
 const worklogMemberFilter = ref("全部成员");
 const worklogDateRange = ref([]);
+const selectedWorklog = ref(null);
 const phaseFileModalVisible = ref(false);
 const phaseFileInput = ref(null);
 const phaseFileEditingId = ref(null);
@@ -806,6 +807,16 @@ function savePhaseBasicInfo() {
   return true;
 }
 function confirmPhaseSettings() { if (savePhaseBasicInfo()) phaseDrawerVisible.value = false; }
+function openWorklogDetail(log) { selectedWorklog.value = log; }
+function handleWorklogClick(event) {
+  const row = event.target.closest?.(".worklog-row:not(.worklog-row-heading)");
+  if (!row) return;
+  const content = Array.from(row.children).at(-1)?.textContent?.trim();
+  const log = filteredWorklogs.value.find(item => item.content === content);
+  if (log) openWorklogDetail(log);
+}
+onMounted(() => document.addEventListener("click", handleWorklogClick));
+onBeforeUnmount(() => document.removeEventListener("click", handleWorklogClick));
 function openPhaseFileModal() { phaseFileEditingId.value = null; phaseFileDraft.value = { file: null, current: null }; if (phaseFileInput.value) phaseFileInput.value.value = ""; phaseFileModalVisible.value = true; }
 function openPhaseFileEdit(file) { phaseFileEditingId.value = file.id; phaseFileDraft.value = { file: null, current: file }; if (phaseFileInput.value) phaseFileInput.value.value = ""; phaseFileModalVisible.value = true; }
 function formatFileSize(bytes) {
@@ -972,5 +983,6 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
     <a-drawer :visible="Boolean(selectedProject)" width="620px" title="项目详情" @cancel="selectedProject = null"><template v-if="selectedProject"><div class="project-detail-hero"><span>{{ selectedProject.customerCode }}-{{ selectedProject.code }}</span><h2>{{ selectedProject.name }}</h2><p>{{ selectedProject.customerCode }}-{{ selectedProject.customerName }}</p></div><section class="project-public-section"><header><div><strong>项目公共资料</strong><small>项目级公共信息，供项目成员协作查看</small></div><div class="project-public-actions"><a-button type="text" size="small" @click="openProjectInfoEditor"><IconEdit />编辑资料</a-button></div></header><div v-if="selectedProjectPublicDocument" class="rich-text-display project-public-document" v-html="selectedProjectPublicDocument" /><a-empty v-else description="暂无项目公共资料" /></section></template></a-drawer>
     <a-modal v-model:visible="projectInfoModalVisible" title="编辑项目公共资料" ok-text="保存" cancel-text="取消" @ok="saveProjectInfo"><a-form layout="vertical"><a-form-item label="资料内容"><RichTextEditor v-model="projectInfoDraft" placeholder="补充客户资料、服务器信息、代码仓库、部署地址等项目公共信息" /></a-form-item></a-form></a-modal>
     <a-drawer v-model:visible="helpVisible" width="440px" title="项目模块帮助"><a-input placeholder="搜索帮助内容"><template #prefix><IconSearch /></template></a-input><div class="help-list"><details><summary>如何创建新任务？</summary><p>选择左侧期号后，在任务搜索筛选栏点击新建任务。</p></details><details><summary>项目树的层级是什么？</summary><p>项目树按客户、项目、期号三级展示，任务归属于具体期号。</p></details><details><summary>如何查看延期任务？</summary><p>使用任务搜索筛选栏中的状态筛选，选择延期。</p></details></div></a-drawer>
+    <a-modal :visible="Boolean(selectedWorklog)" title="日报详情" :footer="false" @cancel="selectedWorklog = null"><template v-if="selectedWorklog"><div class="worklog-detail"><div class="worklog-detail-meta"><span>日期<b>{{ selectedWorklog.date }}</b></span><span>成员<b>{{ selectedWorklog.member }}</b></span><span>工时<b>{{ selectedWorklog.hours }}h</b></span><span>期号<b>{{ selectedPhase.code }} · {{ selectedPhase.name }}</b></span></div><section><header><strong>工作内容</strong><small>日报记录</small></header><p>{{ selectedWorklog.content }}</p></section></div></template></a-modal>
   </div>
 </template>

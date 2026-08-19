@@ -356,7 +356,17 @@ h1, h2, h3, p { margin: 0; }
 .worklog-row-heading { background: #f7f8fa; color: #86909c; font-size: 10px; }
 .worklog-row strong { color: #165dff; }
 .worklog-row > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.worklog-row:not(.worklog-row-heading) > span:last-child { cursor: pointer; color: rgb(var(--primary-6)); }
+.worklog-row:not(.worklog-row-heading):hover > span:last-child, .worklog-row:not(.worklog-row-heading) > span:last-child:focus { text-decoration: underline; }
 .worklog-list .arco-empty { padding: 20px; }
+.worklog-detail-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
+.worklog-detail-meta span { min-width: 0; color: #86909c; font-size: 11px; }
+.worklog-detail-meta b { display: block; overflow: hidden; margin-top: 5px; color: #1d2129; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.worklog-detail section { border-top: 1px solid var(--line); padding-top: 16px; }
+.worklog-detail section header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.worklog-detail section header strong { color: #1d2129; font-size: 14px; }
+.worklog-detail section header small { color: #86909c; font-size: 11px; }
+.worklog-detail section p { margin: 0; color: #4e5969; line-height: 1.8; }
 .phase-file-item > .arco-icon { flex: 0 0 auto; color: #165dff; font-size: 20px; }
 .phase-file-item > span:not(.file-actions), .phase-member-item > span:not(.phase-member-actions) { min-width: 0; flex: 1; }
 .phase-file-item b, .phase-member-item b { overflow: hidden; display: block; color: #4e5969; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
