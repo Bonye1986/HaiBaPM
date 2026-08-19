@@ -91,6 +91,17 @@ export const taskSeed = [
   { id: "T-260819", phase: "1507-01-01", title: "工单路由规则开发", module: "服务端", status: "进行中", owner: "张伟", priority: "P1", start: "2026-08-12", due: "2026-08-28", progress: 51, description: "根据业务类型和服务等级自动分派工单。" },
 ];
 
+export const dailyReportSeed = [
+  { id: "DR-260819-01", name: "一期交付日报 · 2026-08-19", sender: "李项目", sentAt: "2026-08-19 18:32", date: "2026-08-19", status: "已发送", phase: "1500-01-01", hours: 3, summary: "完成一期交付资料评审，确认登录链路测试范围和验收标准。", nextPlan: "跟进客户确认结果，推进测试报告终版归档。", blockers: "等待客户确认测试范围。" },
+  { id: "DR-260819-02", name: "服务端联调日报 · 2026-08-19", sender: "张伟", sentAt: "2026-08-19 19:05", date: "2026-08-19", status: "已发送", phase: "1500-01-01", hours: 6, summary: "完成支付回调幂等校验与异常场景联调，补充重复通知测试。", nextPlan: "继续修复结算比例计算，补充历史订单回归用例。", blockers: "暂无。" },
+  { id: "DR-260818-01", name: "项目协作日报 · 2026-08-18", sender: "李项目", sentAt: "2026-08-18 18:16", date: "2026-08-18", status: "已发送", phase: "0000-01-01", hours: 4, summary: "完成客户、项目和期号工作区联动检查，整理权限边界。", nextPlan: "确认任务页筛选逻辑，并同步项目成员权限。", blockers: "暂无。" },
+  { id: "DR-260818-02", name: "测试回归日报 · 2026-08-18", sender: "陈晨", sentAt: "2026-08-18 17:48", date: "2026-08-18", status: "待确认", phase: "1500-01-01", hours: 5, summary: "整理测试报告问题清单，完成登录链路和权限入口回归。", nextPlan: "跟进 P0 问题修复并更新测试报告终版。", blockers: "结算比例问题仍在修复中。" },
+  { id: "DR-260817-01", name: "需求确认日报 · 2026-08-17", sender: "王芳", sentAt: "2026-08-17 18:02", date: "2026-08-17", status: "已发送", phase: "1500-01-01", hours: 4, summary: "完成消息通知模板和二期需求范围初步梳理。", nextPlan: "提交客户确认，并拆分二期需求任务。", blockers: "等待客户确认通知模板。" },
+  { id: "DR-260816-01", name: "交付资料日报 · 2026-08-16", sender: "刘洋", sentAt: "2026-08-16 17:25", date: "2026-08-16", status: "已退回", phase: "1502-01-01", hours: 5, summary: "整理采购协同验收单、部署记录和操作手册。", nextPlan: "补充客户签字页后重新发送。", blockers: "验收单缺少客户签字页。" },
+  { id: "DR-260815-01", name: "活动平台日报 · 2026-08-15", sender: "赵敏", sentAt: "2026-08-15 18:41", date: "2026-08-15", status: "草稿", phase: "1501-01-01", hours: 4, summary: "完成营销活动配置原型和关键交互说明。", nextPlan: "补充活动效果查看页面，准备评审。", blockers: "暂无。" },
+  { id: "DR-260814-01", name: "会员中台日报 · 2026-08-14", sender: "陈晨", sentAt: "2026-08-14 18:09", date: "2026-08-14", status: "已发送", phase: "1500-02-01", hours: 5, summary: "完成会员画像规则复核，输出存量数据修复建议。", nextPlan: "确认规则变更影响并安排回归测试。", blockers: "历史数据口径仍需产品确认。" },
+];
+
 export const statusColors = { "未完成": "arcoblue", "进行中": "arcoblue", "待确认": "orange", "延期": "red", "已完成": "green", "未开始": "gray" };
 export const priorityColors = { P0: "red", P1: "orange", P2: "gray" };
 
