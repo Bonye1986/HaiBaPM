@@ -317,6 +317,7 @@ h1, h2, h3, p { margin: 0; }
 .phase-tool-actions .arco-btn { justify-content: center; }
 .phase-settings-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); margin: -4px -4px 18px; padding: 0 4px; }
 .phase-settings-tabs button { height: 36px; flex: 0 0 auto; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 10px; color: #86909c; font-size: 12px; cursor: pointer; }
+.phase-settings-tabs button:nth-child(2) { display: none; }
 .phase-settings-tabs button.active { border-bottom-color: #165dff; color: #165dff; font-weight: 600; }
 .phase-edit-button { margin-top: 14px; }
 .phase-basic-form .arco-select,
