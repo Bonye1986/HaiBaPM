@@ -10,6 +10,7 @@ import { phaseByKey, priorityColors, projects, statusColors, taskSeed } from "./
 import RichTextEditor from "./components/RichTextEditor.vue";
 
 const navItems = ["工作台", "项目", "任务", "日报", "工时", "团队", "统计"];
+const activeNav = ref("项目");
 const authStorageKey = "haiba-pm-auth";
 const storedAuthState = sessionStorage.getItem(authStorageKey) || localStorage.getItem(authStorageKey);
 const isAuthenticated = ref(storedAuthState !== "logged-out");
@@ -190,6 +191,30 @@ const phaseListData = computed(() => {
   }))));
   return rows;
 });
+const isManagementRole = computed(() => /管理员|管理层|总经理|副总|总监|CEO|项目经理|部门经理/.test(accountProfile.value.position || ""));
+const dashboardPhaseRows = computed(() => {
+  projectRevision.value;
+  const rows = [];
+  projects.forEach(customer => customer.projects.forEach(project => project.phases.forEach(phase => {
+    const phaseTasks = tasks.value.filter(task => task.phase === phase.key);
+    const members = phaseMembers.value[phase.key] || [];
+    const related = isManagementRole.value || phase.owner === accountProfile.value.nickname || members.some(member => member.name === accountProfile.value.nickname) || phaseTasks.some(task => [task.owner, task.confirmer, ...(task.executors || [])].includes(accountProfile.value.nickname));
+    if (related) rows.push({ ...phase, customerCode: customer.code, customerName: customer.name, projectCode: project.code, projectName: project.name, projectKey: project.key });
+  })));
+  return rows;
+});
+const dashboardTasks = computed(() => {
+  const phaseKeys = new Set(dashboardPhaseRows.value.map(phase => phase.key));
+  return tasks.value.filter(task => phaseKeys.has(task.phase)).sort((a, b) => ({ P0: 0, P1: 1, P2: 2 }[a.priority] ?? 3) - ({ P0: 0, P1: 1, P2: 2 }[b.priority] ?? 3) || (a.createdAt ?? 0) - (b.createdAt ?? 0)).slice(0, 8);
+});
+const dashboardStats = computed(() => {
+  const phases = dashboardPhaseRows.value;
+  const total = phases.length;
+  const completed = phases.filter(phase => phase.status === "已完成").length;
+  const delayed = phases.filter(phase => phase.status === "延期").length;
+  return { total, inProgress: phases.filter(phase => phase.status === "进行中").length, completed, delayed, delayRate: total ? Math.round(delayed / total * 100) : 0, completionRate: total ? Math.round(completed / total * 100) : 0 };
+});
+const dashboardDate = computed(() => new Date().toISOString().slice(0, 10));
 const phaseTasks = computed(() => tasks.value.filter(task => task.phase === selectedPhaseKey.value));
 const phaseTaskStats = computed(() => ({
   total: phaseTasks.value.length,
@@ -256,6 +281,11 @@ watch([normalizedKeyword, filteredProjects], () => {
   expandedKeys.value = filteredProjects.value.flatMap(customer => customer.projects.map(project => project.key));
 });
 function notify(text) { Message.info(text); }
+function handleNavigation(key) {
+  if (key === "工作台" || key === "项目") { activeNav.value = key; return; }
+  activeNav.value = "项目";
+  notify(`${key}模块将在后续设计`);
+}
 async function handleLogin() {
   const account = loginDraft.value.account.trim();
   if (!account) { loginError.value = "请输入账号"; return; }
@@ -1254,7 +1284,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
   <div v-else class="app-shell">
     <header class="global-header">
       <a-button class="brand" type="text" @click="notify('海拔PM')"><IconArrowRise /><strong>海拔PM</strong></a-button>
-      <a-menu class="global-nav" mode="horizontal" :selected-keys="['项目']" @menu-item-click="key => key !== '项目' && notify(`${key}模块将在后续设计`)"><a-menu-item v-for="item in navItems" :key="item">{{ item }}</a-menu-item></a-menu>
+      <a-menu class="global-nav" mode="horizontal" :selected-keys="[activeNav]" @menu-item-click="handleNavigation"><a-menu-item v-for="item in navItems" :key="item">{{ item }}</a-menu-item></a-menu>
       <div class="header-actions">
         <a-tooltip content="设置"><a-button type="text" aria-label="设置" @click="openProfileDrawer"><IconSettings />设置</a-button></a-tooltip>
         <a-tooltip content="帮助中心"><a-button type="text" @click="helpVisible = true"><IconQuestionCircle />帮助</a-button></a-tooltip>
@@ -1263,7 +1293,13 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       </div>
     </header>
 
-    <div class="project-layout">
+    <main v-if="activeNav === '工作台'" class="workbench-page">
+      <header class="workbench-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · {{ dashboardDate }}</span><h1>工作台</h1><p>{{ isManagementRole ? '查看全部项目期号、任务与交付风险。' : '聚焦与你相关的项目期号和待办任务。' }}</p></div><a-button type="primary" @click="activeNav = '项目'"><IconApps />进入项目</a-button></header>
+      <section class="workbench-stat-grid"><article><span>项目期号数量</span><strong>{{ dashboardStats.total }}</strong><small>当前可见范围</small></article><article><span>进行中期号数量</span><strong>{{ dashboardStats.inProgress }}</strong><small>正在交付</small></article><article><span>已完成期号数量</span><strong>{{ dashboardStats.completed }}</strong><small>已完成</small></article><article><span>延期期号数量</span><strong>{{ dashboardStats.delayed }}</strong><small>需要关注</small></article><article><span>项目延期率</span><strong>{{ dashboardStats.delayRate }}%</strong><small>延期 / 全部期号</small></article><article><span>项目完成率</span><strong>{{ dashboardStats.completionRate }}%</strong><small>完成 / 全部期号</small></article></section>
+      <section class="workbench-panel"><header><div><h2>任务列表</h2><span>按优先级和创建时间排序</span></div><a-button type="text" @click="activeNav = '项目'"><IconList />查看全部</a-button></header><div class="workbench-task-table"><div class="workbench-row workbench-row-heading"><span>任务名称</span><span>项目期号</span><span>负责人</span><span>状态</span><span>截止时间</span></div><button v-for="task in dashboardTasks" :key="task.id" class="workbench-row" @click="selectedPhaseKey = task.phase; onTaskRowClick(task)"><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span>{{ phaseByKey(task.phase)?.code }} · {{ phaseByKey(task.phase)?.name }}</span><span>{{ task.owner }}</span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span>{{ task.due }}</span></button><a-empty v-if="!dashboardTasks.length" description="暂无相关任务" /></div></section>
+      <section class="workbench-panel"><header><div><h2>期号列表</h2><span>按当前账号权限展示</span></div><a-button type="text" @click="activeNav = '项目'"><IconFolder />查看项目</a-button></header><div class="workbench-phase-grid"><button v-for="phase in dashboardPhaseRows" :key="phase.key" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.customerCode }}-{{ phase.projectCode }} · {{ phase.projectName }}</strong><small>{{ phase.code }} · {{ phase.name }}</small></span><span class="workbench-phase-meta"><small>负责人：{{ phase.owner }}</small><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></span></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section>
+    </main>
+    <div v-else class="project-layout">
       <aside class="project-navigator">
         <div class="navigator-heading"><h1>客户 / 项目 + 期号</h1><a-radio-group class="project-view-control" type="button" size="small" v-model="projectView"><a-radio value="tree" title="项目树" aria-label="项目树"><IconMindMapping /></a-radio><a-radio value="list" title="列表" aria-label="列表"><IconList /></a-radio></a-radio-group></div>
         <div class="navigator-search"><a-input v-model="navigatorKeyword" allow-clear placeholder="搜索客户、项目或期号"><template #prefix><IconSearch /></template></a-input></div>
