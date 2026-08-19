@@ -251,8 +251,8 @@ h1, h2, h3, p { margin: 0; }
 .rich-text-display p, .rich-text-display div { margin: 0 0 6px; }
 .rich-text-display ul, .rich-text-display ol { margin: 4px 0 8px; padding-left: 20px; }
 .subtask-builder { margin-top: 16px; padding-top: 14px; border-top: 1px solid #f2f3f5; }
-.subtask-builder header, .task-subtasks-section header, .task-activity-section header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-.subtask-builder header span, .task-subtasks-section header span, .task-activity-section header span { color: #86909c; font-size: 11px; font-weight: 400; }
+.subtask-builder header, .task-subtasks-section header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.subtask-builder header span, .task-subtasks-section header span { color: #86909c; font-size: 11px; font-weight: 400; }
 .subtask-add-row { display: flex; gap: 8px; }
 .subtask-add-row .arco-input-wrapper { min-width: 0; flex: 1; }
 .subtask-list, .task-subtask-list, .task-activity-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
@@ -260,6 +260,10 @@ h1, h2, h3, p { margin: 0; }
 .subtask-list > div > span { min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; color: #4e5969; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .task-subtask-list > div .arco-checkbox { min-width: 0; flex: 1; }
 .task-subtask-list > div .arco-tag { flex: 0 0 auto; margin: 0; }
+.task-subtask-actions { display: inline-flex; align-items: center; gap: 2px; }
+.task-subtasks-empty { margin: 9px 0 0; color: #86909c; font-size: 12px; }
+.task-drawer-subtask-add { gap: 6px; }
+.task-drawer-subtask-add .arco-btn { width: 32px; padding: 0; }
 .task-activity-list > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 8px 10px; border-left: 2px solid #d9e7ff; background: #f7fbff; }
 .task-activity-list > div > span, .task-activity-list b, .task-activity-list small { display: block; min-width: 0; }
 .task-activity-list b { color: #1d2129; font-size: 11px; }
@@ -269,7 +273,10 @@ h1, h2, h3, p { margin: 0; }
 .drawer-heading span { margin-bottom: 3px; color: #86909c; font-size: 10px; font-weight: 400; }
 .drawer-footer { display: flex; justify-content: flex-end; gap: 8px; }
 .task-drawer-heading { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.task-drawer-heading strong { overflow: hidden; color: #1d2129; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.task-title-view-row, .task-title-edit-row { min-width: 0; display: flex; align-items: center; gap: 3px; }
+.task-title-view-row strong { min-width: 0; flex: 1; overflow: hidden; color: #1d2129; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.task-title-view-row .arco-btn, .task-title-edit-row .arco-btn { flex: 0 0 auto; padding: 2px 4px; }
+.task-title-edit-row .arco-input-wrapper { min-width: 0; flex: 1; }
 .task-drawer-heading small { overflow: hidden; color: #86909c; font-size: 11px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .task-drawer-path { margin-bottom: 14px; color: #86909c; font-size: 11px; }
 .task-drawer-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -282,7 +289,11 @@ h1, h2, h3, p { margin: 0; }
 .drawer-section header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .drawer-section p { color: #4e5969; line-height: 1.7; }
 .task-description-section { min-height: 170px; }
-.task-comments-section > header > span { color: #86909c; font-size: 11px; font-weight: 400; }
+.task-collaboration-tabs { display: flex; gap: 4px; margin: -18px -1px 14px; border-bottom: 1px solid var(--line); }
+.task-collaboration-tabs button { height: 34px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 10px; color: #86909c; font-size: 12px; cursor: pointer; }
+.task-collaboration-tabs button:hover { color: rgb(var(--primary-6)); }
+.task-collaboration-tabs button.active { border-bottom-color: rgb(var(--primary-6)); color: rgb(var(--primary-6)); font-weight: 500; }
+.task-collaboration-tabs b { margin-left: 3px; font-size: 11px; font-weight: 500; }
 .task-comment-list { display: flex; flex-direction: column; gap: 8px; }
 .task-comment-item { position: relative; padding: 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
 .task-comment-reply { margin-left: 20px; border-left: 3px solid #94bfff; background: #f7fbff; }
