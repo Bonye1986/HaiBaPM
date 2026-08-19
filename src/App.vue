@@ -17,6 +17,20 @@ const loginLoading = ref(false);
 const loginError = ref("");
 const socialLoginProvider = ref("");
 const loginDraft = ref({ account: "lixiangmu@haiba.example", password: "", remember: true });
+const profileDrawerVisible = ref(false);
+const profileAvatarInput = ref(null);
+const profileError = ref("");
+const profileBindingLoading = ref("");
+const accountProfile = ref({
+  avatarUrl: "",
+  account: "lixiangmu@haiba.example",
+  phone: "13800001234",
+  nickname: "李项目",
+  position: "项目经理",
+  wecomBound: true,
+  wechatBound: false,
+});
+const profileDraft = ref({ ...accountProfile.value });
 const passwordModalVisible = ref(false);
 const passwordError = ref("");
 const passwordDraft = ref({ currentPassword: "", newPassword: "", confirmPassword: "" });
@@ -216,6 +230,7 @@ const createProjectOptions = computed(() => { projectRevision.value; return proj
 const customerStatusCounts = computed(() => Object.fromEntries(["全部状态", "进行中", "未开始", "已完成", "延期"].map(status => [status, customerScope.value.reduce((total, customer) => total + customer.projects.reduce((sum, project) => sum + project.phases.filter(phase => status === "全部状态" || phase.status === status).length, 0), 0)])));
 const selectedProjectPublicDocument = computed(() => projectPublicInfo.value[selectedProject.value?.key]?.document || "");
 const rowSelection = computed(() => ({ selectedRowKeys: selectedTaskKeys.value, onChange: keys => { selectedTaskKeys.value = keys; } }));
+const profileInitial = computed(() => accountProfile.value.nickname.trim().slice(0, 1) || "用");
 const columns = [
   { title: "任务名称", dataIndex: "title", slotName: "title", width: 194 },
   { title: "优先级", dataIndex: "priority", slotName: "priority", width: 78 },
@@ -281,6 +296,7 @@ function handleLogout() {
       taskModalVisible.value = false;
       phaseMemberModalVisible.value = false;
       phaseFileModalVisible.value = false;
+      profileDrawerVisible.value = false;
       passwordModalVisible.value = false;
       helpVisible.value = false;
       isAuthenticated.value = false;
@@ -289,6 +305,61 @@ function handleLogout() {
       passwordError.value = "";
       passwordDraft.value = { currentPassword: "", newPassword: "", confirmPassword: "" };
       Message.success("已退出登录");
+    },
+  });
+}
+function openProfileDrawer() {
+  profileDraft.value = { ...accountProfile.value };
+  profileError.value = "";
+  profileDrawerVisible.value = true;
+}
+function handleProfileAvatarChange(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) { Message.warning("请选择图片文件"); return; }
+  if (file.size > 5 * 1024 * 1024) { Message.warning("头像图片不能超过 5 MB"); return; }
+  const reader = new FileReader();
+  reader.onload = () => { profileDraft.value = { ...profileDraft.value, avatarUrl: String(reader.result || "") }; };
+  reader.onerror = () => Message.error("头像读取失败，请重新选择");
+  reader.readAsDataURL(file);
+}
+function saveProfile() {
+  const account = profileDraft.value.account.trim();
+  const phone = profileDraft.value.phone.trim();
+  const nickname = profileDraft.value.nickname.trim();
+  const position = profileDraft.value.position.trim();
+  if (!account) { profileError.value = "请输入登录账号"; return; }
+  if (phone && !/^1[3-9]\d{9}$/.test(phone)) { profileError.value = "请输入正确的 11 位手机号"; return; }
+  if (!nickname) { profileError.value = "请输入昵称"; return; }
+  if (!position) { profileError.value = "请输入职务"; return; }
+  accountProfile.value = { ...profileDraft.value, account, phone, nickname, position };
+  loginDraft.value.account = account;
+  profileDrawerVisible.value = false;
+  profileError.value = "";
+  Message.success("个人信息已保存");
+}
+async function bindProfileAccount(provider) {
+  if (profileBindingLoading.value) return;
+  profileBindingLoading.value = provider;
+  await new Promise(resolve => window.setTimeout(resolve, 450));
+  const field = provider === "企业微信" ? "wecomBound" : "wechatBound";
+  accountProfile.value = { ...accountProfile.value, [field]: true };
+  profileDraft.value = { ...profileDraft.value, [field]: true };
+  profileBindingLoading.value = "";
+  Message.success(`${provider}绑定成功`);
+}
+function unbindProfileAccount(provider) {
+  Modal.confirm({
+    title: `解绑${provider}`,
+    content: `解绑后将不能使用${provider}授权登录，是否继续？`,
+    okText: "确认解绑",
+    cancelText: "取消",
+    onOk: () => {
+      const field = provider === "企业微信" ? "wecomBound" : "wechatBound";
+      accountProfile.value = { ...accountProfile.value, [field]: false };
+      profileDraft.value = { ...profileDraft.value, [field]: false };
+      Message.success(`${provider}已解绑`);
     },
   });
 }
@@ -1061,7 +1132,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <div class="header-actions">
         <a-tooltip content="帮助中心"><a-button type="text" @click="helpVisible = true"><IconQuestionCircle />帮助</a-button></a-tooltip>
         <a-dropdown trigger="click"><a-button type="text"><IconNotification />通知</a-button><template #content><div class="notification-panel"><header><strong>通知</strong><a-button type="text" size="mini">全部已读</a-button></header><button><IconClockCircle /><span><strong>任务即将逾期</strong><small>支付回调幂等校验将在 3 天后到期</small></span></button><button><IconCheckCircle /><span><strong>任务等待确认</strong><small>核对审核状态流转已提交确认</small></span></button><button><IconInfoCircle /><span><strong>期号进度更新</strong><small>一期核心交付进度已更新为 68%</small></span></button></div></template></a-dropdown>
-        <a-dropdown trigger="click"><button class="profile-trigger"><a-avatar :size="32">李</a-avatar><span><strong>李项目</strong><small>项目经理</small></span><IconDown /></button><template #content><a-menu class="account-menu"><div class="account-summary"><a-avatar :size="38">李</a-avatar><div><strong>李项目</strong><small>lixiangmu@haiba.example</small></div></div><a-menu-item key="profile" @click="notify('个人信息功能将在后续开放')"><IconUser />个人信息</a-menu-item><a-menu-item key="password" @click="openPasswordModal"><IconLock />修改密码</a-menu-item><a-menu-item key="logout" @click="handleLogout"><IconPoweroff />退出登录</a-menu-item></a-menu></template></a-dropdown>
+        <a-dropdown trigger="click"><button class="profile-trigger"><a-avatar :size="32" :image-url="accountProfile.avatarUrl">{{ profileInitial }}</a-avatar><span><strong>{{ accountProfile.nickname }}</strong><small>{{ accountProfile.position }}</small></span><IconDown /></button><template #content><a-menu class="account-menu"><div class="account-summary"><a-avatar :size="38" :image-url="accountProfile.avatarUrl">{{ profileInitial }}</a-avatar><div><strong>{{ accountProfile.nickname }}</strong><small>{{ accountProfile.account }}</small></div></div><a-menu-item key="profile" @click="openProfileDrawer"><IconUser />个人信息</a-menu-item><a-menu-item key="password" @click="openPasswordModal"><IconLock />修改密码</a-menu-item><a-menu-item key="logout" @click="handleLogout"><IconPoweroff />退出登录</a-menu-item></a-menu></template></a-dropdown>
       </div>
     </header>
 
@@ -1087,6 +1158,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
     </div>
 
     <a-modal v-model:visible="taskModalVisible" title="新建任务" ok-text="创建任务" cancel-text="取消" :ok-button-props="{ disabled: !draft.title.trim() }" @ok="createTask"><div class="modal-context"><span>项目期号</span><strong>{{ selectedPhase.code }} {{ selectedPhase.projectName }}-{{ selectedPhase.name }}</strong></div><a-form layout="vertical"><a-form-item label="任务名称" required><a-input v-model="draft.title" autofocus placeholder="填写明确、可交付的任务名称" /></a-form-item><div class="form-grid"><a-form-item label="状态"><a-select v-model="draft.status"><a-option v-for="status in ['未完成', '待确认', '已完成']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="确认人"><a-select v-model="draft.confirmer"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item><a-form-item label="执行人"><a-select v-model="draft.executors" multiple :max-tag-count="2" placeholder="可选择多个执行人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item><a-form-item label="优先级"><a-select v-model="draft.priority"><a-option v-for="priority in ['P0', 'P1', 'P2']" :key="priority" :value="priority">{{ priority }}</a-option></a-select></a-form-item><a-form-item label="截止时间"><a-input v-model="draft.due" type="date" /></a-form-item></div><a-form-item label="任务描述"><RichTextEditor v-model="draft.description" placeholder="补充任务目标、验收标准、依赖或交付物" /></a-form-item><section class="subtask-builder"><header><strong>子任务</strong><span>{{ draft.subtasks.length }} 项</span></header><div class="subtask-add-row"><a-input v-model="subtaskDraft" placeholder="添加子任务名称" @keyup.enter="addSubtask" /><a-button type="outline" @click="addSubtask"><IconPlus />添加</a-button></div><div v-if="draft.subtasks.length" class="subtask-list"><div v-for="subtask in draft.subtasks" :key="subtask.id"><span><a-tag color="gray">未完成</a-tag>{{ subtask.title }}</span><a-button type="text" size="small" @click="removeSubtask(subtask)"><IconDelete /></a-button></div></div></section></a-form></a-modal>
+    <a-drawer v-model:visible="profileDrawerVisible" width="640px" title="个人信息"><div class="profile-avatar-section"><a-avatar :size="72" :image-url="profileDraft.avatarUrl">{{ profileDraft.nickname.trim().slice(0, 1) || '用' }}</a-avatar><div><strong>{{ profileDraft.nickname || '未设置昵称' }}</strong><span>{{ profileDraft.position || '未设置职务' }}</span><small>支持 JPG、PNG 等图片，文件不超过 5 MB</small></div><span class="profile-avatar-actions"><a-button type="outline" size="small" @click="profileAvatarInput?.click()"><IconImport />更换头像</a-button><a-button v-if="profileDraft.avatarUrl" type="text" size="small" @click="profileDraft.avatarUrl = ''"><IconDelete />移除</a-button></span><input ref="profileAvatarInput" class="profile-avatar-input" type="file" accept="image/*" @change="handleProfileAvatarChange" /></div><section class="profile-settings-section"><header><strong>基本资料</strong><span>用于登录识别和项目协作展示</span></header><a-form layout="vertical"><div class="form-grid"><a-form-item label="账号" required><a-input v-model="profileDraft.account" allow-clear placeholder="手机号、邮箱或成员账号" @input="profileError = ''" /></a-form-item><a-form-item label="手机号"><a-input v-model="profileDraft.phone" allow-clear maxlength="11" placeholder="用于安全验证和联系" @input="profileError = ''" /></a-form-item><a-form-item label="昵称" required><a-input v-model="profileDraft.nickname" allow-clear maxlength="20" placeholder="协作中显示的名称" @input="profileError = ''" /></a-form-item><a-form-item label="职务" required><a-input v-model="profileDraft.position" allow-clear maxlength="30" placeholder="例如：项目经理" @input="profileError = ''" /></a-form-item></div></a-form><p v-if="profileError" class="profile-error" role="alert">{{ profileError }}</p></section><section class="profile-settings-section"><header><strong>第三方账号</strong><span>绑定后可使用对应平台授权登录</span></header><div class="profile-security-list"><div><span class="profile-security-icon wecom"><IconSafe /></span><span><b>企业微信</b><small>{{ profileDraft.wecomBound ? '已绑定，可使用企业微信授权登录' : '未绑定' }}</small></span><a-tag :color="profileDraft.wecomBound ? 'green' : 'gray'">{{ profileDraft.wecomBound ? '已绑定' : '未绑定' }}</a-tag><a-button v-if="profileDraft.wecomBound" type="text" size="small" @click="unbindProfileAccount('企业微信')">解绑</a-button><a-button v-else type="outline" size="small" :loading="profileBindingLoading === '企业微信'" :disabled="Boolean(profileBindingLoading)" @click="bindProfileAccount('企业微信')">绑定</a-button></div><div><span class="profile-security-icon wechat"><IconWechat /></span><span><b>微信</b><small>{{ profileDraft.wechatBound ? '已绑定，可使用微信授权登录' : '未绑定' }}</small></span><a-tag :color="profileDraft.wechatBound ? 'green' : 'gray'">{{ profileDraft.wechatBound ? '已绑定' : '未绑定' }}</a-tag><a-button v-if="profileDraft.wechatBound" type="text" size="small" @click="unbindProfileAccount('微信')">解绑</a-button><a-button v-else type="outline" size="small" :loading="profileBindingLoading === '微信'" :disabled="Boolean(profileBindingLoading)" @click="bindProfileAccount('微信')">绑定</a-button></div></div></section><section class="profile-settings-section"><header><strong>登录安全</strong><span>定期更新密码可以降低账号风险</span></header><div class="profile-security-list"><div><span class="profile-security-icon password"><IconLock /></span><span><b>登录密码</b><small>已设置，修改后请使用新密码登录</small></span><a-tag color="green">已设置</a-tag><a-button type="outline" size="small" @click="openPasswordModal">修改密码</a-button></div></div></section><template #footer><div class="drawer-footer"><a-button @click="profileDrawerVisible = false">取消</a-button><a-button type="primary" @click="saveProfile">保存</a-button></div></template></a-drawer>
     <a-modal v-model:visible="passwordModalVisible" title="修改密码" ok-text="保存密码" cancel-text="取消" :on-before-ok="submitPasswordChange"><a-form layout="vertical" @submit.prevent="submitPasswordChange"><a-form-item label="当前密码" required><a-input-password v-model="passwordDraft.currentPassword" allow-clear autocomplete="current-password" placeholder="请输入当前密码" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><a-form-item label="新密码" required><a-input-password v-model="passwordDraft.newPassword" allow-clear autocomplete="new-password" placeholder="至少 8 个字符" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><a-form-item label="确认新密码" required><a-input-password v-model="passwordDraft.confirmPassword" allow-clear autocomplete="new-password" placeholder="请再次输入新密码" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><p v-if="passwordError" class="password-error" role="alert">{{ passwordError }}</p><p class="password-help"><IconInfoCircle />当前为演示环境，密码不会保存在浏览器本地。</p></a-form></a-modal>
     <a-modal v-model:visible="laneModalVisible" :title="laneEditingKey ? '编辑看板列' : '添加看板列'" ok-text="保存" cancel-text="取消" :ok-button-props="{ disabled: !laneDraft.title.trim() }" @ok="saveLane"><a-form layout="vertical"><a-form-item label="列名称" required><a-input v-model="laneDraft.title" maxlength="20" show-word-limit placeholder="例如：待客户确认" /></a-form-item><a-form-item label="列颜色"><a-select v-model="laneDraft.color"><a-option v-for="option in laneColorOptions" :key="option.value" :value="option.value">{{ option.label }}</a-option></a-select></a-form-item></a-form></a-modal>
 

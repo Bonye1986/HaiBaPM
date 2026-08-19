@@ -242,6 +242,34 @@ h1, h2, h3, p { margin: 0; }
 .account-menu .arco-menu-item { height: 40px; line-height: 40px; }
 .account-menu .arco-menu-item svg { margin-right: 8px; }
 .account-menu .danger-item { color: rgb(var(--danger-6)); }
+.profile-avatar-section { min-height: 112px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); padding: 4px 0 20px; }
+.profile-avatar-section > div { min-width: 0; }
+.profile-avatar-section strong, .profile-avatar-section span, .profile-avatar-section small { display: block; }
+.profile-avatar-section strong { overflow: hidden; color: #1d2129; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-avatar-section > div > span { margin-top: 4px; color: #4e5969; font-size: 12px; }
+.profile-avatar-section small { margin-top: 7px; color: #86909c; font-size: 10px; }
+.profile-avatar-actions { display: inline-flex; align-items: center; gap: 4px; }
+.profile-avatar-actions .arco-btn { white-space: nowrap; }
+.profile-avatar-input { display: none; }
+.profile-settings-section { padding: 22px 0; border-bottom: 1px solid var(--line); }
+.profile-settings-section:last-of-type { border-bottom: 0; }
+.profile-settings-section > header { display: flex; align-items: baseline; gap: 9px; margin-bottom: 16px; }
+.profile-settings-section > header strong { color: #1d2129; font-size: 14px; }
+.profile-settings-section > header span { color: #86909c; font-size: 10px; }
+.profile-settings-section .arco-form-item { margin-bottom: 16px; }
+.profile-error { margin: -4px 0 0; border: 1px solid #f7c8c8; border-radius: 4px; background: #fff3f3; padding: 8px 10px; color: #c33b3b; font-size: 11px; }
+.profile-security-list { border-top: 1px solid #f2f3f5; }
+.profile-security-list > div { min-height: 66px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border-bottom: 1px solid #f2f3f5; }
+.profile-security-list > div > span:nth-child(2) { min-width: 0; }
+.profile-security-list b, .profile-security-list small { display: block; }
+.profile-security-list b { color: #1d2129; font-size: 12px; }
+.profile-security-list small { overflow: hidden; margin-top: 4px; color: #86909c; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-security-list .arco-tag { margin: 0; }
+.profile-security-list .arco-btn { min-width: 58px; }
+.profile-security-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 4px; font-size: 17px; }
+.profile-security-icon.wecom { background: #e8f3ff; color: #2f7cf6; }
+.profile-security-icon.wechat { background: #e8ffea; color: #1aad19; }
+.profile-security-icon.password { background: #f2f3f5; color: #4e5969; }
 .notification-panel { width: 330px; border: 1px solid var(--line); border-radius: 4px; background: white; box-shadow: 0 10px 30px rgba(29,33,41,.14); }
 .notification-panel header { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid #f2f3f5; }
 .notification-panel > button { width: 100%; display: flex; gap: 10px; border: 0; border-bottom: 1px solid #f2f3f5; background: white; padding: 12px 14px; text-align: left; }
@@ -749,6 +777,11 @@ h1, h2, h3, p { margin: 0; }
   .login-panel { margin: 28px auto; padding: 24px 20px; }
   .login-panel-heading { align-items: flex-start; }
   .social-login-list { grid-template-columns: 1fr; }
+  .profile-avatar-section { grid-template-columns: auto minmax(0, 1fr); }
+  .profile-avatar-actions { grid-column: 1 / -1; }
+  .profile-settings-section .form-grid { grid-template-columns: 1fr; }
+  .profile-security-list > div { grid-template-columns: 34px minmax(0, 1fr) auto; padding: 8px 0; }
+  .profile-security-list > div > .arco-btn { grid-column: 2 / -1; justify-self: end; }
   .global-header { height: var(--header-height); grid-template-columns: 1fr auto; grid-template-rows: 56px 56px; padding: 0 10px; }
   .brand strong { display: block; }
   .global-nav.arco-menu-horizontal { height: 56px; grid-column: 1 / -1; grid-row: 2; border-top: 1px solid #f2f3f5; }
