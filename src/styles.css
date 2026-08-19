@@ -314,12 +314,27 @@ h1, h2, h3, p { margin: 0; }
 .subtask-builder header span, .task-subtasks-section header span { color: #86909c; font-size: 11px; font-weight: 400; }
 .subtask-add-row { display: flex; gap: 8px; }
 .subtask-add-row .arco-input-wrapper { min-width: 0; flex: 1; }
+.subtask-add-row .subtask-assignee-select { width: 126px; flex: 0 0 126px; }
 .subtask-list, .task-subtask-list, .task-activity-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .subtask-list > div, .task-subtask-list > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: #f7f8fa; }
 .subtask-list > div > span { min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; color: #4e5969; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.draft-subtask-actions { flex: 0 0 auto; overflow: visible !important; }
+.draft-subtask-actions .arco-select { width: 112px; }
 .task-subtask-list > div .arco-checkbox { min-width: 0; flex: 1; }
 .task-subtask-list > div .arco-tag { flex: 0 0 auto; margin: 0; }
 .task-subtask-actions { display: inline-flex; align-items: center; gap: 2px; }
+.task-subtask-list > .task-subtask-row { min-height: 42px; display: grid; grid-template-columns: 18px minmax(110px, 1fr) 108px auto auto; justify-content: stretch; gap: 6px; padding: 5px 6px; transition: border-color .15s, opacity .15s; }
+.task-subtask-list > .task-subtask-row.editing { grid-template-columns: 18px minmax(110px, 1fr) 108px auto; }
+.task-subtask-row.dragging { border-color: #94bfff; opacity: .55; }
+.task-subtask-drag { width: 18px; height: 28px; display: grid; place-items: center; color: #a9b2bf; cursor: grab; }
+.task-subtask-drag:active { cursor: grabbing; }
+.task-subtask-drag:hover { color: rgb(var(--primary-6)); }
+.task-subtask-row .arco-checkbox { overflow: hidden; }
+.task-subtask-row .arco-checkbox-label { min-width: 0; overflow: hidden; }
+.task-subtask-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-subtask-assignee.arco-select { width: 108px; }
+.task-subtask-edit-input { min-width: 0; }
+.task-subtask-actions .arco-btn { width: 26px; min-width: 26px; height: 26px; padding: 0; }
 .task-subtasks-empty { margin: 9px 0 0; color: #86909c; font-size: 12px; }
 .task-drawer-subtask-add { gap: 6px; }
 .task-drawer-subtask-add .arco-btn { width: 32px; padding: 0; }
@@ -782,6 +797,12 @@ h1, h2, h3, p { margin: 0; }
   .profile-settings-section .form-grid { grid-template-columns: 1fr; }
   .profile-security-list > div { grid-template-columns: 34px minmax(0, 1fr) auto; padding: 8px 0; }
   .profile-security-list > div > .arco-btn { grid-column: 2 / -1; justify-self: end; }
+  .subtask-add-row { flex-wrap: wrap; }
+  .subtask-add-row .subtask-assignee-select { width: calc(100% - 40px); flex: 1 1 calc(100% - 40px); }
+  .task-subtask-list > .task-subtask-row { grid-template-columns: 18px minmax(0, 1fr) auto; }
+  .task-subtask-row .task-subtask-assignee { grid-column: 2; grid-row: 2; width: 100%; }
+  .task-subtask-row > .arco-tag { grid-column: 3; grid-row: 1; }
+  .task-subtask-row > .task-subtask-actions { grid-column: 3; grid-row: 2; }
   .global-header { height: var(--header-height); grid-template-columns: 1fr auto; grid-template-rows: 56px 56px; padding: 0 10px; }
   .brand strong { display: block; }
   .global-nav.arco-menu-horizontal { height: 56px; grid-column: 1 / -1; grid-row: 2; border-top: 1px solid #f2f3f5; }
