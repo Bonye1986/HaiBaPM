@@ -32,6 +32,14 @@ h1, h2, h3, p { margin: 0; }
 .login-options .arco-checkbox-label { color: #4e5969; font-size: 12px; }
 .login-options .arco-btn { padding: 0; }
 .login-submit.arco-btn { height: 44px; font-weight: 600; }
+.login-divider { display: flex; align-items: center; gap: 10px; margin: 22px 0 14px; color: #a9b2bf; font-size: 10px; }
+.login-divider::before, .login-divider::after { height: 1px; flex: 1; background: #edf0f4; content: ""; }
+.social-login-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.social-login-button.arco-btn { height: 40px; justify-content: center; border-color: #dfe5ed; background: #fdfefe; color: #4e5969; font-size: 12px; }
+.social-login-button.arco-btn:hover:not(:disabled) { border-color: #b9c9e3; background: #f7faff; }
+.social-login-button .arco-icon { margin-right: 5px; font-size: 18px; }
+.wechat-login .arco-icon { color: #1aad19; }
+.wecom-login .arco-icon { color: #2f7cf6; }
 .login-panel > footer { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 18px; border-top: 1px solid #edf0f4; padding-top: 15px; color: #86909c; font-size: 10px; }
 .login-panel > footer svg { color: #27844b; }
 .global-header {
@@ -737,6 +745,7 @@ h1, h2, h3, p { margin: 0; }
   .login-header > span:last-child { display: none; }
   .login-panel { margin: 28px auto; padding: 24px 20px; }
   .login-panel-heading { align-items: flex-start; }
+  .social-login-list { grid-template-columns: 1fr; }
   .global-header { height: var(--header-height); grid-template-columns: 1fr auto; grid-template-rows: 56px 56px; padding: 0 10px; }
   .brand strong { display: block; }
   .global-nav.arco-menu-horizontal { height: 56px; grid-column: 1 / -1; grid-row: 2; border-top: 1px solid #f2f3f5; }

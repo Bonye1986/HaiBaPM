@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Message, Modal } from "@arco-design/web-vue";
 import {
   IconArrowRise, IconCalendar, IconCheckCircle, IconClockCircle, IconClose, IconCopy, IconDown, IconExport, IconFile,
-  IconFolder, IconInfoCircle, IconLock, IconMenuFold, IconMenuUnfold, IconMore, IconNotification,
+  IconFolder, IconInfoCircle, IconLock, IconMenuFold, IconMenuUnfold, IconMore, IconNotification, IconWechat,
   IconApps, IconDelete, IconEdit, IconImport, IconList, IconMindMapping, IconPlus, IconPoweroff, IconQuestionCircle, IconRefresh, IconSafe, IconSearch, IconSettings, IconUser, IconUserAdd, IconUserGroup,
 } from "@arco-design/web-vue/es/icon";
 import { phaseByKey, priorityColors, projects, statusColors, taskSeed } from "./data.js";
@@ -15,6 +15,7 @@ const storedAuthState = sessionStorage.getItem(authStorageKey) || localStorage.g
 const isAuthenticated = ref(storedAuthState !== "logged-out");
 const loginLoading = ref(false);
 const loginError = ref("");
+const socialLoginProvider = ref("");
 const loginDraft = ref({ account: "lixiangmu@haiba.example", password: "", remember: true });
 const statusOptions = ["全部状态", "未完成", "待确认", "已完成"];
 const taskStatusMap = { "未开始": "未完成", "进行中": "未完成", "延期": "未完成" };
@@ -247,6 +248,19 @@ async function handleLogin() {
   } finally {
     loginLoading.value = false;
   }
+}
+async function handleSocialLogin(provider) {
+  if (loginLoading.value || socialLoginProvider.value) return;
+  socialLoginProvider.value = provider;
+  loginError.value = "";
+  const authUrl = provider === "微信" ? import.meta.env.VITE_WECHAT_AUTH_URL : import.meta.env.VITE_WECOM_AUTH_URL;
+  if (authUrl) {
+    window.location.assign(authUrl);
+    return;
+  }
+  await new Promise(resolve => window.setTimeout(resolve, 450));
+  socialLoginProvider.value = "";
+  loginError.value = `${provider}授权服务尚未配置，请联系系统管理员完成授权应用配置`;
 }
 function handleLogout() {
   Modal.confirm({
@@ -1002,6 +1016,11 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
         <div class="login-options"><a-checkbox v-model="loginDraft.remember">保持登录</a-checkbox><a-button type="text" size="small" @click="notify('请联系系统管理员重置密码')">忘记密码</a-button></div>
         <a-button class="login-submit" type="primary" html-type="submit" size="large" long :loading="loginLoading">登录</a-button>
       </form>
+      <div class="login-divider"><span>其他方式登录</span></div>
+      <div class="social-login-list">
+        <a-button class="social-login-button wechat-login" size="large" long :loading="socialLoginProvider === '微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('微信')"><IconWechat />微信授权登录</a-button>
+        <a-button class="social-login-button wecom-login" size="large" long :loading="socialLoginProvider === '企业微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('企业微信')"><IconSafe />企业微信授权登录</a-button>
+      </div>
       <footer><IconSafe />登录状态仅保存在当前浏览器，不会保存密码</footer>
     </section>
   </main>
