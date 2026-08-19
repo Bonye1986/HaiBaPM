@@ -4,7 +4,7 @@ import { Message, Modal } from "@arco-design/web-vue";
 import {
   IconArrowRise, IconCalendar, IconCheckCircle, IconClockCircle, IconClose, IconCopy, IconDown, IconExport, IconFile,
   IconFolder, IconInfoCircle, IconLock, IconMenuFold, IconMenuUnfold, IconMore, IconNotification,
-  IconApps, IconDelete, IconEdit, IconImport, IconList, IconMindMapping, IconPlus, IconQuestionCircle, IconRefresh, IconSearch, IconSettings, IconUser, IconUserAdd, IconUserGroup,
+  IconApps, IconDelete, IconEdit, IconImport, IconList, IconMindMapping, IconPlus, IconPoweroff, IconQuestionCircle, IconRefresh, IconSearch, IconSettings, IconUser, IconUserAdd, IconUserGroup,
 } from "@arco-design/web-vue/es/icon";
 import { phaseByKey, priorityColors, projects, statusColors, taskSeed } from "./data.js";
 import RichTextEditor from "./components/RichTextEditor.vue";
@@ -948,7 +948,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <div class="header-actions">
         <a-tooltip content="帮助中心"><a-button type="text" @click="helpVisible = true"><IconQuestionCircle />帮助</a-button></a-tooltip>
         <a-dropdown trigger="click"><a-button type="text"><IconNotification />通知</a-button><template #content><div class="notification-panel"><header><strong>通知</strong><a-button type="text" size="mini">全部已读</a-button></header><button><IconClockCircle /><span><strong>任务即将逾期</strong><small>支付回调幂等校验将在 3 天后到期</small></span></button><button><IconCheckCircle /><span><strong>任务等待确认</strong><small>核对审核状态流转已提交确认</small></span></button><button><IconInfoCircle /><span><strong>期号进度更新</strong><small>一期核心交付进度已更新为 68%</small></span></button></div></template></a-dropdown>
-        <a-dropdown trigger="click"><button class="profile-trigger"><a-avatar :size="32">李</a-avatar><span><strong>李项目</strong><small>项目经理</small></span><IconDown /></button><template #content><a-menu class="account-menu"><div class="account-summary"><a-avatar :size="38">李</a-avatar><div><strong>李项目</strong><small>lixiangmu@haiba.example</small></div></div><a-menu-item key="profile" @click="notify('账号设置将在系统设置模块开放')"><IconUser />个人信息</a-menu-item><a-menu-item key="password"><IconLock />修改密码</a-menu-item><a-menu-item key="settings"><IconSettings />系统设置</a-menu-item><a-menu-item key="logout"><IconExport />退出登录</a-menu-item></a-menu></template></a-dropdown>
+        <a-dropdown trigger="click"><button class="profile-trigger"><a-avatar :size="32">李</a-avatar><span><strong>李项目</strong><small>项目经理</small></span><IconDown /></button><template #content><a-menu class="account-menu"><div class="account-summary"><a-avatar :size="38">李</a-avatar><div><strong>李项目</strong><small>lixiangmu@haiba.example</small></div></div><a-menu-item key="profile" @click="notify('个人信息功能将在后续开放')"><IconUser />个人信息</a-menu-item><a-menu-item key="password" @click="notify('修改密码功能将在后续开放')"><IconLock />修改密码</a-menu-item><a-menu-item key="logout" @click="notify('已退出登录')"><IconPoweroff />退出登录</a-menu-item></a-menu></template></a-dropdown>
       </div>
     </header>
 
