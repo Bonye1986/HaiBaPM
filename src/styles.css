@@ -348,7 +348,10 @@ h1, h2, h3, p { margin: 0; }
 .drawer-footer { display: flex; justify-content: flex-end; gap: 8px; }
 .task-drawer-heading { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .task-title-view-row, .task-title-edit-row { min-width: 0; display: flex; align-items: center; gap: 3px; }
+.task-title-view-row { cursor: text; }
+.task-title-view-row:focus-visible { outline: 2px solid #94bfff; outline-offset: 2px; border-radius: 2px; }
 .task-title-view-row strong { min-width: 0; flex: 1; overflow: hidden; color: #1d2129; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.task-title-view-row:hover strong { color: rgb(var(--primary-6)); }
 .task-title-view-row .arco-btn, .task-title-edit-row .arco-btn { flex: 0 0 auto; padding: 2px 4px; }
 .task-title-edit-row .arco-input-wrapper { min-width: 0; flex: 1; }
 .task-drawer-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
