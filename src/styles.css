@@ -69,7 +69,7 @@ h1, h2, h3, p { margin: 0; }
   box-shadow: 0 4px 10px rgba(22, 93, 255, .2);
 }
 .brand strong { margin-left: 2px; font-size: 18px; }
-.global-nav.arco-menu-horizontal { width: 100%; height: 64px; border: 0; background: transparent; box-shadow: none; }
+.global-nav.arco-menu-horizontal { width: 100%; height: 64px; border: 0; border-bottom: 1px solid var(--line); background: transparent; box-shadow: none; }
 .global-nav.arco-menu-horizontal .arco-menu-inner { height: 64px; justify-content: center; padding: 0; overflow: visible; }
 .global-nav.arco-menu-horizontal .arco-menu-item {
   position: relative;
@@ -81,7 +81,7 @@ h1, h2, h3, p { margin: 0; }
   line-height: 64px;
   text-align: center;
 }
-.global-nav.arco-menu-horizontal .arco-menu-selected { color: rgb(var(--primary-6)); font-weight: 600; box-shadow: inset 0 -3px 0 rgb(var(--primary-6)); }
+.global-nav.arco-menu-horizontal .arco-menu-selected { position: relative; z-index: 1; color: rgb(var(--primary-6)); font-weight: 600; box-shadow: inset 0 -3px 0 rgb(var(--primary-6)); }
 .global-nav.arco-menu-horizontal .arco-menu-selected::after { display: none !important; }
 .global-nav.arco-menu-horizontal .arco-menu-selected-label { display: none !important; }
 .header-actions { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
