@@ -6,7 +6,7 @@ import {
 } from "@arco-design/web-vue/es/icon";
 
 const props = defineProps({ modelValue: { type: String, default: "" }, placeholder: { type: String, default: "" } });
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue", "blur"]);
 const editorRef = ref(null);
 const selectionRef = ref(null);
 const imageInputRef = ref(null);
@@ -115,6 +115,6 @@ onMounted(async () => { await nextTick(); if (editorRef.value) editorRef.value.i
     <input ref="imageInputRef" class="rich-text-file-input" type="file" accept="image/*" @change="handleFile($event, 'image')" />
     <input ref="audioInputRef" class="rich-text-file-input" type="file" accept="audio/*" @change="handleFile($event, 'audio')" />
     <input ref="videoInputRef" class="rich-text-file-input" type="file" accept="video/*" @change="handleFile($event, 'video')" />
-    <div ref="editorRef" class="rich-text-content" contenteditable="true" role="textbox" aria-multiline="true" :data-placeholder="placeholder" @input="syncContent" @paste="handlePaste" />
+    <div ref="editorRef" class="rich-text-content" contenteditable="true" role="textbox" aria-multiline="true" :data-placeholder="placeholder" @input="syncContent" @paste="handlePaste" @blur="emit('blur')" />
   </div>
 </template>
