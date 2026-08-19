@@ -50,6 +50,10 @@ const taskKeyword = ref("");
 const statusFilter = ref("全部状态");
 const sortBy = ref("优先级");
 const dueDateFilter = ref("");
+const taskPageType = ref("全部");
+const taskPageStatus = ref("全部");
+const taskPageDueDate = ref("");
+const taskPageKeyword = ref("");
 const teamMembers = ["李项目", "王芳", "张伟", "赵敏", "陈晨", "刘洋"];
 const tasks = ref(taskSeed.map((task, index) => ({
   ...task,
@@ -215,6 +219,21 @@ const dashboardStats = computed(() => {
   return { total, inProgress: phases.filter(phase => phase.status === "进行中").length, completed, delayed, delayRate: total ? Math.round(delayed / total * 100) : 0, completionRate: total ? Math.round(completed / total * 100) : 0 };
 });
 const dashboardDate = computed(() => new Date().toISOString().slice(0, 10));
+const taskPageRows = computed(() => {
+  const keyword = taskPageKeyword.value.trim();
+  const currentUser = accountProfile.value.nickname;
+  return tasks.value.filter(task => {
+    const phase = phaseByKey(task.phase);
+    const executors = task.executors || [task.owner];
+    const creator = task.createdBy || task.owner;
+    const related = isManagementRole.value || creator === currentUser || task.owner === currentUser || task.confirmer === currentUser || executors.includes(currentUser);
+    const typeMatch = taskPageType.value === "全部" || (taskPageType.value === "我发起的" && creator === currentUser) || (taskPageType.value === "我执行的" && executors.includes(currentUser)) || (taskPageType.value === "我确认的" && task.confirmer === currentUser);
+    const statusMatch = taskPageStatus.value === "全部" || task.status === taskPageStatus.value;
+    const dateMatch = !taskPageDueDate.value || task.due === taskPageDueDate.value;
+    const keywordMatch = !keyword || `${task.title}${task.id}${phase?.code || ""}${phase?.name || ""}${phase?.projectName || ""}`.includes(keyword);
+    return related && typeMatch && statusMatch && dateMatch && keywordMatch;
+  }).sort((a, b) => ({ P0: 0, P1: 1, P2: 2 }[a.priority] ?? 3) - ({ P0: 0, P1: 1, P2: 2 }[b.priority] ?? 3) || (a.createdAt ?? 0) - (b.createdAt ?? 0));
+});
 const phaseTasks = computed(() => tasks.value.filter(task => task.phase === selectedPhaseKey.value));
 const phaseTaskStats = computed(() => ({
   total: phaseTasks.value.length,
@@ -282,7 +301,7 @@ watch([normalizedKeyword, filteredProjects], () => {
 });
 function notify(text) { Message.info(text); }
 function handleNavigation(key) {
-  if (key === "工作台" || key === "项目") { activeNav.value = key; return; }
+  if (["工作台", "项目", "任务"].includes(key)) { activeNav.value = key; return; }
   activeNav.value = "项目";
   notify(`${key}模块将在后续设计`);
 }
@@ -1298,6 +1317,11 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <section class="workbench-stat-grid"><article><span>项目期号数量</span><strong>{{ dashboardStats.total }}</strong><small>当前可见范围</small></article><article><span>进行中期号数量</span><strong>{{ dashboardStats.inProgress }}</strong><small>正在交付</small></article><article><span>已完成期号数量</span><strong>{{ dashboardStats.completed }}</strong><small>已完成</small></article><article><span>延期期号数量</span><strong>{{ dashboardStats.delayed }}</strong><small>需要关注</small></article><article><span>项目延期率</span><strong>{{ dashboardStats.delayRate }}%</strong><small>延期 / 全部期号</small></article><article><span>项目完成率</span><strong>{{ dashboardStats.completionRate }}%</strong><small>完成 / 全部期号</small></article></section>
       <section class="workbench-panel"><header><div><h2>任务列表</h2><span>按优先级和创建时间排序</span></div><a-button type="text" @click="activeNav = '项目'"><IconList />查看全部</a-button></header><div class="workbench-task-table"><div class="workbench-row workbench-row-heading"><span>任务名称</span><span>项目期号</span><span>负责人</span><span>状态</span><span>截止时间</span></div><button v-for="task in dashboardTasks" :key="task.id" class="workbench-row" @click="selectedPhaseKey = task.phase; onTaskRowClick(task)"><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span>{{ phaseByKey(task.phase)?.code }} · {{ phaseByKey(task.phase)?.name }}</span><span>{{ task.owner }}</span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span>{{ task.due }}</span></button><a-empty v-if="!dashboardTasks.length" description="暂无相关任务" /></div></section>
       <section class="workbench-panel"><header><div><h2>期号列表</h2><span>按当前账号权限展示</span></div><a-button type="text" @click="activeNav = '项目'"><IconFolder />查看项目</a-button></header><div class="workbench-phase-grid"><button v-for="phase in dashboardPhaseRows" :key="phase.key" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.customerCode }}-{{ phase.projectCode }} · {{ phase.projectName }}</strong><small>{{ phase.code }} · {{ phase.name }}</small></span><span class="workbench-phase-meta"><small>负责人：{{ phase.owner }}</small><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></span></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section>
+    </main>
+    <main v-else-if="activeNav === '任务'" class="task-page">
+      <header class="task-page-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 任务协作</span><h1>任务</h1><p>{{ isManagementRole ? '查看全部任务并按条件快速定位。' : '只显示与你发起、执行或确认相关的任务。' }}</p></div><a-button type="primary" @click="openTaskModal"><IconPlus />新建任务</a-button></header>
+      <section class="task-page-filters"><a-radio-group v-model="taskPageType" type="button"><a-radio value="全部">全部</a-radio><a-radio value="我发起的">我发起的</a-radio><a-radio value="我执行的">我执行的</a-radio><a-radio value="我确认的">我确认的</a-radio></a-radio-group><a-select v-model="taskPageStatus" class="task-page-status-filter"><a-option value="全部">全部状态</a-option><a-option value="未完成">未完成</a-option><a-option value="待确认">待确认</a-option><a-option value="已完成">已完成</a-option></a-select><a-date-picker v-model="taskPageDueDate" value-format="YYYY-MM-DD" format="YYYY-MM-DD" placeholder="截止时间" allow-clear /><a-input v-model="taskPageKeyword" class="task-page-search" allow-clear placeholder="搜索期号或任务名称"><template #prefix><IconSearch /></template></a-input></section>
+      <section class="task-page-panel"><header><div><h2>任务列表</h2><span>共 {{ taskPageRows.length }} 项 · 默认按优先级和创建时间排序</span></div><a-button type="text" @click="taskPageType = '全部'; taskPageStatus = '全部'; taskPageDueDate = ''; taskPageKeyword = ''">重置筛选</a-button></header><div class="task-page-table"><div class="task-page-row task-page-row-heading"><span>任务名称</span><span>项目期号</span><span>类型</span><span>负责人</span><span>状态</span><span>截止时间</span></div><button v-for="task in taskPageRows" :key="task.id" class="task-page-row" @click="selectedPhaseKey = task.phase; onTaskRowClick(task)"><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span><strong>{{ phaseByKey(task.phase)?.code }}</strong><small>{{ phaseByKey(task.phase)?.name }}</small></span><span><small>发起：{{ task.createdBy || task.owner }}</small><small>执行：{{ (task.executors || [task.owner]).join('、') }}</small></span><span>{{ task.owner }}</span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span>{{ task.due }}</span></button><a-empty v-if="!taskPageRows.length" description="暂无符合条件的任务" /></div></section>
     </main>
     <div v-else class="project-layout">
       <aside class="project-navigator">
