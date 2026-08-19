@@ -382,6 +382,9 @@ h1, h2, h3, p { margin: 0; }
 .phase-member-item > strong { color: #4e5969; font-size: 12px; }
 .external-member-note { display: flex; align-items: flex-start; gap: 8px; margin: -2px 0 14px; padding: 10px 12px; border: 1px solid #d9e7ff; border-radius: 4px; background: #f7fbff; color: #4e5969; font-size: 11px; line-height: 1.5; }
 .external-member-note > svg { flex: 0 0 auto; margin-top: 1px; color: rgb(var(--primary-6)); }
+.invite-link-row { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.invite-link-row .arco-input-wrapper { min-width: 0; flex: 1; }
+.invite-link-row > .arco-btn { width: 34px; flex: 0 0 auto; padding: 0; }
 .phase-member-item .arco-tag { margin-left: 5px; vertical-align: 1px; }
 .phase-member-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .phase-member-actions { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; margin-left: auto; }
