@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { Message } from "@arco-design/web-vue";
+import { Message, Modal } from "@arco-design/web-vue";
 import {
   IconArrowRise, IconCalendar, IconCheckCircle, IconClockCircle, IconDown, IconExport, IconFile,
   IconFolder, IconInfoCircle, IconLock, IconMenuFold, IconMenuUnfold, IconMore, IconNotification,
@@ -62,6 +62,8 @@ const phaseDraft = ref({});
 const projectRevision = ref(0);
 const projectCreateModalVisible = ref(false);
 const projectCreateType = ref("project");
+const projectCreateMode = ref("create");
+const projectCreateEditingKey = ref("");
 const projectCreateDraft = ref({ customerKey: "1500", projectKey: "", projectCode: "", projectName: "", phaseCode: "", phaseName: "", phaseStatus: "未开始", phaseOwner: "李项目", phaseDatesRange: [] });
 const phaseFiles = ref({
   "1500-01-01": [
@@ -311,9 +313,85 @@ function emptyProjectCreateDraft(customerKey = selectedCustomerKey.value || proj
   return { customerKey, projectKey: "", projectCode: "", projectName: "", phaseCode: "", phaseName: "", phaseStatus: "未开始", phaseOwner: "李项目", phaseDatesRange: [] };
 }
 function openProjectCreateModal() {
+  projectCreateMode.value = "create";
+  projectCreateEditingKey.value = "";
   projectCreateType.value = "project";
   projectCreateDraft.value = emptyProjectCreateDraft();
   projectCreateModalVisible.value = true;
+}
+function openProjectEdit(project) {
+  const current = projectByKey(project.key) || project;
+  projectCreateMode.value = "edit";
+  projectCreateEditingKey.value = current.key;
+  projectCreateType.value = "project";
+  projectCreateDraft.value = {
+    ...emptyProjectCreateDraft(current.customerCode),
+    projectCode: current.code,
+    projectName: current.name,
+  };
+  projectCreateModalVisible.value = true;
+}
+function openPhaseEdit(phase) {
+  const current = phaseByKey(phase.key) || phase;
+  projectCreateMode.value = "edit";
+  projectCreateEditingKey.value = current.key;
+  projectCreateType.value = "phase";
+  projectCreateDraft.value = {
+    ...emptyProjectCreateDraft(current.customerCode),
+    projectKey: `${current.customerCode}-${current.projectCode}`,
+    phaseCode: current.code,
+    phaseName: current.name,
+    phaseStatus: current.status,
+    phaseOwner: current.owner,
+    phaseDatesRange: current.dates.split(" 至 "),
+  };
+  projectCreateModalVisible.value = true;
+}
+function removeProject(project) {
+  const current = projectByKey(project.key) || project;
+  const customer = projects.find(item => item.key === current.customerCode);
+  if (!customer) return;
+  const target = customer.projects.find(item => item.key === current.key);
+  if (!target) return;
+  Modal.confirm({
+    title: "删除项目",
+    content: target.phases.length ? `“${target.name}”包含 ${target.phases.length} 个期号，删除后将一并移除，是否继续？` : `确定删除项目“${target.name}”吗？`,
+    okText: "删除",
+    cancelText: "取消",
+    onOk: () => {
+      customer.projects = customer.projects.filter(item => item.key !== target.key);
+      projectRevision.value += 1;
+      if (selectedProject.value?.key === target.key) selectedProject.value = null;
+      const nextPhase = customer.projects.flatMap(item => item.phases)[0] || projects.flatMap(item => item.projects.flatMap(projectItem => projectItem.phases))[0];
+      if (nextPhase) selectedPhaseKey.value = nextPhase.key;
+      Message.success("项目已删除");
+    },
+  });
+}
+function removePhase(phase) {
+  const current = phaseByKey(phase.key) || phase;
+  const customer = projects.find(item => item.key === current.customerCode);
+  const target = customer?.projects.find(item => item.key === `${current.customerCode}-${current.projectCode}`);
+  if (!target) return;
+  Modal.confirm({
+    title: "删除期号",
+    content: `确定删除期号“${current.name}”吗？该期号下的任务和资料入口也会移除。`,
+    okText: "删除",
+    cancelText: "取消",
+    onOk: () => {
+      target.phases = target.phases.filter(item => item.key !== current.key);
+      projectRevision.value += 1;
+      if (selectedPhaseKey.value === current.key) {
+        const fallback = target.phases[0] || projects.flatMap(item => item.projects.flatMap(projectItem => projectItem.phases))[0];
+        if (fallback) selectedPhaseKey.value = fallback.key;
+      }
+      Message.success("期号已删除");
+    },
+  });
+}
+function openTreeNodeMenu(node, action) {
+  if (action === "edit") return node.nodeType === "project" ? openProjectEdit(node) : openPhaseEdit(node);
+  return node.nodeType === "project" ? removeProject(node) : removePhase(node);
 }
 function switchProjectCreateType(type) {
   projectCreateType.value = type;
@@ -333,6 +411,18 @@ function saveProjectCreate() {
     const code = String(draftValue.projectCode || "").trim();
     const name = String(draftValue.projectName || "").trim();
     if (!code || !name) { Message.warning("请填写项目编号和项目名称"); return; }
+    if (projectCreateMode.value === "edit") {
+      const target = customer.projects.find(project => project.key === projectCreateEditingKey.value);
+      if (!target) { Message.warning("项目不存在或已被删除"); return; }
+      if (customer.projects.some(project => project.key !== target.key && (project.code === code || project.name === name))) { Message.warning("该客户下已存在相同项目"); return; }
+      target.code = code;
+      target.name = name;
+      if (selectedProject.value?.key === target.key) selectedProject.value = projectByKey(target.key);
+      projectRevision.value += 1;
+      projectCreateModalVisible.value = false;
+      Message.success("项目已更新");
+      return;
+    }
     if (customer.projects.some(project => project.code === code || project.name === name)) { Message.warning("该客户下已存在相同项目"); return; }
     const projectKey = `${customer.key}-${code}`;
     customer.projects.push({ key: projectKey, code, name, phases: [] });
@@ -350,6 +440,44 @@ function saveProjectCreate() {
   if (!project) { Message.warning("请选择项目"); return; }
   if (!phaseCodeInput || !phaseName || !draftValue.phaseOwner || datesRange.length !== 2) { Message.warning("请填写期号编号、名称、负责人和完整计划时间"); return; }
   const phaseCode = phaseCodeInput.includes("-") ? phaseCodeInput : `${customer.code}-${project.code}-${phaseCodeInput}`;
+  if (projectCreateMode.value === "edit") {
+    const target = project.phases.find(phase => phase.key === projectCreateEditingKey.value);
+    if (!target) { Message.warning("期号不存在或已被删除"); return; }
+    if (project.phases.some(phase => phase.key !== target.key && (phase.code === phaseCode || phase.name === phaseName))) { Message.warning("该项目下已存在相同期号"); return; }
+    target.code = phaseCode;
+    target.key = phaseCode;
+    target.name = phaseName;
+    target.status = draftValue.phaseStatus;
+    target.owner = draftValue.phaseOwner;
+    target.dates = formatPhaseDateRange(datesRange);
+    const previousKey = projectCreateEditingKey.value;
+    if (previousKey !== phaseCode) {
+      tasks.value = tasks.value.map(task => task.phase === previousKey ? { ...task, phase: phaseCode } : task);
+      boardOrder.value = [...boardOrder.value];
+      if (phaseFiles.value[previousKey]) {
+        phaseFiles.value = { ...phaseFiles.value, [phaseCode]: phaseFiles.value[previousKey] };
+        delete phaseFiles.value[previousKey];
+      }
+      if (phaseMembers.value[previousKey]) {
+        phaseMembers.value = { ...phaseMembers.value, [phaseCode]: phaseMembers.value[previousKey] };
+        delete phaseMembers.value[previousKey];
+      }
+      if (phaseWorklogs.value[previousKey]) {
+        phaseWorklogs.value = { ...phaseWorklogs.value, [phaseCode]: phaseWorklogs.value[previousKey] };
+        delete phaseWorklogs.value[previousKey];
+      }
+      if (phaseOverrides.value[previousKey]) {
+        phaseOverrides.value = { ...phaseOverrides.value, [phaseCode]: phaseOverrides.value[previousKey] };
+        delete phaseOverrides.value[previousKey];
+      }
+      recentPhaseKeys.value = recentPhaseKeys.value.map(key => key === previousKey ? phaseCode : key);
+    }
+    if (selectedPhaseKey.value === previousKey) selectedPhaseKey.value = phaseCode;
+    projectRevision.value += 1;
+    projectCreateModalVisible.value = false;
+    Message.success("期号已更新");
+    return;
+  }
   if (project.phases.some(phase => phase.code === phaseCode || phase.name === phaseName)) { Message.warning("该项目下已存在相同期号"); return; }
   const phase = { key: phaseCode, code: phaseCode, name: phaseName, status: draftValue.phaseStatus, progress: 0, dates: formatPhaseDateRange(datesRange), owner: draftValue.phaseOwner };
   project.phases.push(phase);
@@ -671,7 +799,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
             <template v-if="customerCollapsed"><a-tooltip content="展开客户栏"><a-button class="customer-panel-toggle customer-expand-button" type="text" @click="customerCollapsed = false"><IconMenuUnfold /></a-button></a-tooltip><span class="customer-collapsed-label">客户</span></template>
             <template v-else><div class="subpanel-heading"><h2>客户</h2><a-tooltip content="收起客户栏"><a-button class="customer-panel-toggle" type="text" @click="customerCollapsed = true"><IconMenuFold /></a-button></a-tooltip></div><div class="customer-list"><button v-for="customer in visibleCustomers" :key="customer.key" :class="{ active: selectedCustomerKey === customer.key }" :title="`${customer.code}-${customer.name}`" @click="selectCustomer(customer)"><strong>{{ customer.code }}-{{ customer.name }}</strong><em>{{ customerPhaseCount(customer) }}</em></button><a-empty v-if="!visibleCustomers.length" description="没有匹配的客户" /></div></template>
           </section>
-          <section class="project-sidebar"><div class="subpanel-heading"><h2>项目 + 期号</h2><a-tooltip content="添加项目或期号"><a-button class="project-add-button" type="text" aria-label="添加项目或期号" @click="openProjectCreateModal"><IconPlus /></a-button></a-tooltip></div><section class="quick-section"><header><h2>快速入口</h2></header><button v-for="key in recentPhaseKeys" :key="key" :class="{ active: selectedPhaseKey === key }" @click="selectedPhaseKey = key"><IconClockCircle /><span><strong>{{ phaseByKey(key)?.code }}　{{ phaseByKey(key)?.name }}</strong><small>最近打开 · {{ phaseByKey(key)?.projectName }}</small></span></button></section><div class="project-status-tabs"><button v-for="(count, status) in customerStatusCounts" :key="status" :class="{ active: phaseStatus === status }" @click="phaseStatus = status">{{ status === '全部状态' ? '全部' : status }}<b>{{ count }}</b></button></div><a-tree v-if="projectView === 'tree'" class="tree-section" :data="treeData" :expanded-keys="expandedKeys" :selected-keys="[selectedPhaseKey]" block-node show-line @expand="keys => expandedKeys = keys" @select="onTreeSelect"><template #title="node"><div v-if="node.nodeType === 'project'" class="tree-project-title"><IconFolder /><span><b>{{ node.code }}</b>{{ node.name }}</span></div><div v-else class="tree-phase-title"><div><span class="tree-phase-code">{{ node.code }}</span><span class="tree-phase-name">{{ node.name }}</span></div><a-tag :color="phaseStatusColor(node.status)">{{ node.status }}</a-tag><span class="tree-phase-owner">项目负责人：{{ node.owner }}</span></div></template></a-tree><section v-else class="phase-list-section"><div v-for="phase in phaseListData" :key="phase.key" class="phase-list-card" :class="{ active: phase.key === selectedPhaseKey }" role="button" tabindex="0" @click="selectPhase(phase)"><div class="phase-list-main"><strong><span class="phase-list-code">{{ phase.code }}</span>{{ phase.name }}</strong><div class="phase-list-meta"><span v-if="normalizedKeyword" class="phase-customer-label">{{ phase.customerCode }}-{{ phase.customerName }}</span><a-button type="text" size="mini" class="phase-project-link" @click.stop="openProject({ key: phase.projectKey })"><IconFolder />{{ phase.projectName }}</a-button><span>负责人：{{ phase.owner }}</span></div></div><div class="phase-list-side"><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag><div class="phase-progress"><a-progress :percent="phase.progress / 100" size="small" :show-text="false" /><span>{{ phase.progress }}%</span></div></div></div><a-empty v-if="!phaseListData.length" description="没有匹配的期号" /></section></section>
+          <section class="project-sidebar"><div class="subpanel-heading"><h2>项目 + 期号</h2><a-tooltip content="添加项目或期号"><a-button class="project-add-button" type="text" aria-label="添加项目或期号" @click="openProjectCreateModal"><IconPlus /></a-button></a-tooltip></div><section class="quick-section"><header><h2>快速入口</h2></header><button v-for="key in recentPhaseKeys" :key="key" :class="{ active: selectedPhaseKey === key }" @click="selectedPhaseKey = key"><IconClockCircle /><span><strong>{{ phaseByKey(key)?.code }}　{{ phaseByKey(key)?.name }}</strong><small>最近打开 · {{ phaseByKey(key)?.projectName }}</small></span></button></section><div class="project-status-tabs"><button v-for="(count, status) in customerStatusCounts" :key="status" :class="{ active: phaseStatus === status }" @click="phaseStatus = status">{{ status === '全部状态' ? '全部' : status }}<b>{{ count }}</b></button></div><a-tree v-if="projectView === 'tree'" class="tree-section" :data="treeData" :expanded-keys="expandedKeys" :selected-keys="[selectedPhaseKey]" block-node show-line @expand="keys => expandedKeys = keys" @select="onTreeSelect"><template #title="node"><div v-if="node.nodeType === 'project'" class="tree-project-title"><IconFolder /><span><b>{{ node.code }}</b>{{ node.name }}</span><a-dropdown trigger="click" @select="action => openTreeNodeMenu(node, action)"><a-button class="tree-node-more" type="text" size="mini" aria-label="项目更多操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit"><IconEdit />编辑项目</a-doption><a-doption value="delete" class="tree-danger-option"><IconDelete />删除项目</a-doption></template></a-dropdown></div><div v-else class="tree-phase-title"><div class="tree-phase-main"><span class="tree-phase-code">{{ node.code }}</span><span class="tree-phase-name">{{ node.name }}</span><a-dropdown trigger="click" @select="action => openTreeNodeMenu(node, action)"><a-button class="tree-node-more" type="text" size="mini" aria-label="期号更多操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit"><IconEdit />编辑期号</a-doption><a-doption value="delete" class="tree-danger-option"><IconDelete />删除期号</a-doption></template></a-dropdown></div><div class="tree-phase-meta"><span>负责人：{{ node.owner }}</span><a-tag :color="phaseStatusColor(node.status)">{{ node.status }}</a-tag></div></div></template></a-tree><section v-else class="phase-list-section"><div v-for="phase in phaseListData" :key="phase.key" class="phase-list-card" :class="{ active: phase.key === selectedPhaseKey }" role="button" tabindex="0" @click="selectPhase(phase)"><div class="phase-list-main"><strong><span class="phase-list-code">{{ phase.code }}</span>{{ phase.name }}</strong><div class="phase-list-meta"><span v-if="normalizedKeyword" class="phase-customer-label">{{ phase.customerCode }}-{{ phase.customerName }}</span><a-button type="text" size="mini" class="phase-project-link" @click.stop="openProject({ key: phase.projectKey })"><IconFolder />{{ phase.projectName }}</a-button><span>负责人：{{ phase.owner }}</span></div></div><div class="phase-list-side"><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag><div class="phase-progress"><a-progress :percent="phase.progress / 100" size="small" :show-text="false" /><span>{{ phase.progress }}%</span></div></div></div><a-empty v-if="!phaseListData.length" description="没有匹配的期号" /></section></section>
         </div>
       </aside>
 
@@ -688,7 +816,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
 
     <a-drawer :visible="Boolean(selectedTask)" width="620px" @cancel="selectedTask = null"><template #title><div class="task-drawer-heading"><strong>{{ selectedTask?.title || '任务详情' }}</strong><small v-if="selectedTask">{{ selectedPhase.customerCode }}-{{ selectedPhase.customerName }} / {{ selectedPhase.projectName }} / {{ selectedTask.phase }}</small></div></template><template v-if="selectedTask"><div class="task-drawer-path">当前期号 / {{ selectedTask.phase }}</div><div class="task-drawer-actions"><a-select :model-value="selectedTask.status" style="width:148px" @change="value => updateTaskStatus(selectedTask.id, value)"><a-option v-for="status in statusOptions.slice(1)" :key="status" :value="status">{{ status }}</a-option></a-select><a-tag :color="priorityColors[selectedTask.priority]">{{ selectedTask.priority }} 优先级</a-tag></div><div class="task-drawer-meta"><span>确认人<b>{{ selectedTask.confirmer || selectedTask.owner }}</b></span><span>执行人<b>{{ (selectedTask.executors || [selectedTask.owner]).join('、') }}</b></span><span>计划时间<b>{{ selectedTask.start }} 至 {{ selectedTask.due }}</b></span><span>任务编号<b>{{ selectedTask.id }}</b></span></div><section class="drawer-section task-description-section"><header><strong>任务描述</strong></header><div v-if="selectedTask.description" class="rich-text-display" v-html="selectedTask.description" /><p v-else>暂无补充描述。</p></section><section v-if="selectedTask.subtasks?.length" class="drawer-section task-subtasks-section"><header><strong>子任务</strong><span>{{ selectedTask.subtasks.length }} 项</span></header><div class="task-subtask-list"><div v-for="subtask in selectedTask.subtasks" :key="subtask.id"><a-checkbox :model-value="subtask.status === '已完成'" @change="toggleSubtask(selectedTask.id, subtask)">{{ subtask.title }}</a-checkbox><a-tag :color="phaseStatusColor(subtask.status)">{{ subtask.status }}</a-tag></div></div></section><section class="drawer-section task-activity-section"><header><strong>操作记录</strong><span>{{ selectedTaskActivities.length }} 条</span></header><div v-if="selectedTaskActivities.length" class="task-activity-list"><div v-for="activity in selectedTaskActivities" :key="activity.id"><span><b>{{ activity.action }}</b><small>{{ activity.detail }}</small></span><em>{{ activity.operator }} · {{ activity.createdAt }}</em></div></div><a-empty v-else description="暂无操作记录" /></section><section class="drawer-section task-comments-section"><header><strong>评论与回复</strong><span>{{ selectedTaskComments.length }} 条</span></header><div v-if="selectedTaskComments.length" class="task-comment-list"><article v-for="comment in selectedTaskComments" :key="comment.id" class="task-comment-item" :class="{ 'task-comment-reply': comment.parentId }"><div class="task-comment-heading"><span><a-avatar :size="24">{{ comment.author.slice(0, 1) }}</a-avatar><b>{{ comment.author }}</b></span><small>{{ comment.createdAt }}</small></div><div class="rich-text-display" v-html="comment.content" /><a-button type="text" size="small" @click="replyToComment(comment)">回复</a-button></article></div><a-empty v-else description="暂无评论" /><div class="task-comment-editor"><span v-if="replyingTo" class="replying-hint">回复 {{ replyingTo.author }}<a-button type="text" size="small" @click="replyingTo = null; commentDraft = ''">取消</a-button></span><RichTextEditor v-model="commentDraft" placeholder="写下评论或回复" /></div></section></template><template #footer><div class="drawer-footer"><a-button @click="selectedTask = null">关闭</a-button><a-button :disabled="!commentText(commentDraft)" @click="addTaskComment">发表评论</a-button><template v-if="selectedTask?.status === '待确认'"><a-button @click="handleTaskConfirmation(false)">确认不通过</a-button><a-button type="primary" @click="handleTaskConfirmation(true)">确认通过</a-button></template><a-button v-else type="primary" @click="submitTaskResult">提交结果</a-button></div></template></a-drawer>
     <a-drawer v-model:visible="phaseDrawerVisible" width="620px" title="期号设置"><div class="phase-settings-tabs"><button v-for="tab in [{ key: 'basic', label: '基本信息' }, { key: 'stats', label: '数据统计' }, { key: 'hours', label: '工时统计' }, { key: 'files', label: '项目文件' }, { key: 'members', label: '期号成员' }]" :key="tab.key" :class="{ active: phaseSettingsTab === tab.key }" @click="phaseSettingsTab = tab.key">{{ tab.label }}</button></div><template v-if="phaseSettingsTab === 'basic'"><div class="phase-detail-hero"><a-tag :color="phaseStatusColor(selectedPhase.status)">{{ selectedPhase.status }}</a-tag><h2>{{ selectedPhase.code }}</h2><p>{{ selectedPhase.projectName }}-{{ selectedPhase.name }}</p><a-button v-if="!phaseEditing" class="phase-edit-button" type="outline" size="small" @click="startPhaseEdit"><IconEdit />编辑基本信息</a-button></div><div v-if="!phaseEditing" class="phase-descriptions"><p>客户：{{ selectedPhase.customerCode }}-{{ selectedPhase.customerName }}</p><p>项目：{{ selectedPhase.projectCode }} {{ selectedPhase.projectName }}</p><p>负责人：{{ selectedPhase.owner }}</p><p>计划时间：{{ selectedPhase.dates }}</p></div><a-form v-else class="phase-basic-form" layout="vertical"><a-form-item label="期号名称"><a-input v-model="phaseDraft.name" /></a-form-item><div class="form-grid"><a-form-item label="状态"><a-select v-model="phaseDraft.status"><a-option v-for="status in ['未开始', '进行中', '已完成', '延期']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="负责人"><a-select v-model="phaseDraft.owner" allow-search placeholder="搜索负责人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item></div><a-form-item label="计划时间"><a-range-picker v-model="phaseDraft.datesRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /></a-form-item><div class="phase-form-actions"><a-button @click="phaseEditing = false">取消</a-button><a-button type="primary" @click="savePhaseBasicInfo">保存</a-button></div></a-form><section class="drawer-section"><header><strong>期号进度</strong><span>{{ selectedPhase.progress }}%</span></header><a-progress :percent="selectedPhase.progress / 100" /></section></template><template v-else-if="phaseSettingsTab === 'stats'"><section class="phase-settings-panel"><header><strong>期号数据统计</strong><span>{{ selectedPhase.code }} · {{ selectedPhase.name }}</span></header><div class="phase-stat-grid"><article><strong>{{ phaseTaskStats.total }}</strong><span>任务总数</span></article><article><strong>{{ phaseTaskStats.completed }}</strong><span>已完成</span></article><article><strong>{{ phaseTaskStats.active }}</strong><span>执行中</span></article><article><strong>{{ phaseTaskStats.overdue }}</strong><span>延期任务</span></article></div><div class="phase-stat-progress"><header><span>期号完成度</span><b>{{ selectedPhase.progress }}%</b></header><a-progress :percent="selectedPhase.progress / 100" /></div></section></template><template v-else-if="phaseSettingsTab === 'hours'"><section class="phase-settings-panel"><header><div><strong>工时明细</strong><span>按成员与时间范围筛选</span></div></header><div class="worklog-filters"><a-select v-model="worklogMemberFilter" allow-search><a-option value="全部成员">全部成员</a-option><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-input v-model="worklogStartDate" type="date" placeholder="开始日期" /><a-input v-model="worklogEndDate" type="date" placeholder="结束日期" /><a-button type="text" @click="worklogMemberFilter = '全部成员'; worklogStartDate = ''; worklogEndDate = ''">重置</a-button></div><div class="worklog-member-summary"><div v-for="item in worklogMemberSummary" :key="item.member"><span>{{ item.member }}</span><strong>{{ item.hours }}h</strong></div><span v-if="!worklogMemberSummary.length">当前筛选暂无工时</span></div><div class="worklog-list"><div class="worklog-row worklog-row-heading"><span>日期</span><span>成员</span><span>工时</span><span>工作内容</span></div><div v-for="log in filteredWorklogs" :key="log.id" class="worklog-row"><span>{{ log.date }}</span><span>{{ log.member }}</span><strong>{{ log.hours }}h</strong><span>{{ log.content }}</span></div><a-empty v-if="!filteredWorklogs.length" description="暂无工时记录" /></div></section></template><template v-else-if="phaseSettingsTab === 'files'"><section class="phase-settings-panel"><header><div><strong>项目文件</strong><span>当前期号交付资料与协作附件</span></div><a-button type="primary" size="small" @click="openPhaseFileModal"><IconPlus />添加文件</a-button></header><div class="phase-file-list"><div v-for="file in currentPhaseFiles" :key="file.id" class="phase-file-item"><IconFile /><span><b>{{ file.name }}</b><small>{{ file.type }} · {{ file.size }} · 更新于 {{ file.updated }}</small></span><span class="file-actions"><a-tooltip content="预览文件"><a-button type="text" size="small" @click="previewPhaseFile(file)"><IconInfoCircle /></a-button></a-tooltip><a-tooltip content="编辑文件"><a-button type="text" size="small" @click="openPhaseFileEdit(file)"><IconEdit /></a-button></a-tooltip><a-tooltip content="下载文件"><a-button type="text" size="small" @click="notify(`已准备下载：${file.name}`)"><IconExport /></a-button></a-tooltip><a-tooltip content="删除文件"><a-button type="text" size="small" @click="removePhaseFile(file)"><IconDelete /></a-button></a-tooltip></span></div><a-empty v-if="!currentPhaseFiles.length" description="暂无项目文件" /></div></section></template><template v-else><section class="phase-settings-panel"><header><div><strong>期号成员</strong><span>管理当前期号的协作成员与职责</span></div><a-button type="primary" size="small" @click="openPhaseMemberModal"><IconPlus />添加成员</a-button></header><div class="phase-member-list"><div v-for="member in currentPhaseMembers" :key="member.id" class="phase-member-item"><a-avatar :size="32">{{ member.name.slice(0, 1) }}</a-avatar><span><b>{{ member.name }}</b><small>期号角色：{{ member.role }}</small><small>加入时间：{{ member.joinedAt || '未记录' }}</small></span><a-button type="text" size="small" @click="removePhaseMember(member)"><IconDelete /></a-button></div><a-empty v-if="!currentPhaseMembers.length" description="暂无期号成员" /></div></section></template><template #footer><div class="drawer-footer"><a-button @click="phaseDrawerVisible = false">取消</a-button><a-button type="primary" @click="confirmPhaseSettings">确定</a-button></div></template></a-drawer>
-<a-modal v-model:visible="projectCreateModalVisible" title="添加项目或期号" ok-text="添加" cancel-text="取消" @ok="saveProjectCreate"><a-form layout="vertical"><a-form-item label="添加类型"><a-select v-model="projectCreateType" @change="switchProjectCreateType"><a-option value="project">项目</a-option><a-option value="phase">期号</a-option></a-select></a-form-item><a-form-item label="客户"><a-select v-model="projectCreateDraft.customerKey" allow-search placeholder="选择客户" @change="changeProjectCreateCustomer"><a-option v-for="customer in createCustomerOptions" :key="customer.key" :value="customer.key">{{ customer.code }}-{{ customer.name }}</a-option></a-select></a-form-item><template v-if="projectCreateType === 'project'"><div class="form-grid"><a-form-item label="项目编号"><a-input v-model="projectCreateDraft.projectCode" placeholder="例如 03" /></a-form-item><a-form-item label="项目名称"><a-input v-model="projectCreateDraft.projectName" placeholder="填写项目名称" /></a-form-item></div></template><template v-else><a-form-item label="项目"><a-select v-model="projectCreateDraft.projectKey" allow-search placeholder="选择项目"><a-option v-for="project in createProjectOptions" :key="project.key" :value="project.key">{{ project.code }}-{{ project.name }}</a-option></a-select></a-form-item><div class="form-grid"><a-form-item label="期号编号"><a-input v-model="projectCreateDraft.phaseCode" placeholder="例如 03，或填写完整编码" /></a-form-item><a-form-item label="期号名称"><a-input v-model="projectCreateDraft.phaseName" placeholder="填写期号名称" /></a-form-item><a-form-item label="状态"><a-select v-model="projectCreateDraft.phaseStatus"><a-option v-for="status in ['未开始', '进行中', '已完成', '延期']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="负责人"><a-select v-model="projectCreateDraft.phaseOwner" allow-search placeholder="搜索负责人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item></div><a-form-item label="计划时间"><a-range-picker v-model="projectCreateDraft.phaseDatesRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /></a-form-item></template></a-form></a-modal>    <a-modal v-model:visible="phaseFileModalVisible" :title="phaseFileEditingId ? '编辑项目文件' : '添加项目文件'" :ok-text="phaseFileEditingId ? '保存' : '添加'" cancel-text="取消" :ok-button-props="{ disabled: !phaseFileDraft.file }" @ok="savePhaseFile"><div class="phase-file-upload-panel"><input ref="phaseFileInput" class="phase-file-input" type="file" @change="handlePhaseFileChange" /><p v-if="phaseFileDraft.current" class="phase-file-current">当前文件：{{ phaseFileDraft.current.name }}<small>{{ phaseFileDraft.current.type }} · {{ phaseFileDraft.current.size }}</small></p><a-button type="outline" long @click="phaseFileInput?.click()"><IconImport />选择替换文件</a-button><p v-if="phaseFileDraft.file" class="phase-file-selected"><IconFile /><strong>{{ phaseFileDraft.file.name }}</strong><span>{{ formatFileSize(phaseFileDraft.file.size) }}</span></p><p v-else class="phase-file-empty">请选择要添加到当前期号的文件</p></div></a-modal><a-modal v-model:visible="phaseFilePreviewVisible" :title="phaseFilePreview?.name || '文件预览'" width="760px" footer="false" @cancel="closePhaseFilePreview"><div class="phase-file-preview"><iframe v-if="phaseFilePreviewUrl && phaseFilePreview?.type === 'PDF'" :src="phaseFilePreviewUrl" title="文件预览" /><img v-else-if="phaseFilePreviewUrl && phaseFilePreview?.source?.type?.startsWith('image/')" :src="phaseFilePreviewUrl" alt="文件预览" /><div v-else class="phase-file-preview-empty"><IconFile /><strong>{{ phaseFilePreview?.name }}</strong><span>{{ phaseFilePreview?.type }} · {{ phaseFilePreview?.size }}</span><small>当前文件暂不支持在线预览，请使用下载操作查看。</small></div></div></a-modal>
+<a-modal v-model:visible="projectCreateModalVisible" :title="projectCreateMode === 'edit' ? (projectCreateType === 'project' ? '编辑项目' : '编辑期号') : '添加项目或期号'" :ok-text="projectCreateMode === 'edit' ? '保存' : '添加'" cancel-text="取消" @ok="saveProjectCreate"><a-form layout="vertical"><a-form-item v-if="projectCreateMode === 'create'" label="添加类型"><a-select v-model="projectCreateType" @change="switchProjectCreateType"><a-option value="project">项目</a-option><a-option value="phase">期号</a-option></a-select></a-form-item><a-form-item label="客户"><a-select v-model="projectCreateDraft.customerKey" allow-search placeholder="选择客户" :disabled="projectCreateMode === 'edit'" @change="changeProjectCreateCustomer"><a-option v-for="customer in createCustomerOptions" :key="customer.key" :value="customer.key">{{ customer.code }}-{{ customer.name }}</a-option></a-select></a-form-item><template v-if="projectCreateType === 'project'"><div class="form-grid"><a-form-item label="项目编号"><a-input v-model="projectCreateDraft.projectCode" placeholder="例如 03" /></a-form-item><a-form-item label="项目名称"><a-input v-model="projectCreateDraft.projectName" placeholder="填写项目名称" /></a-form-item></div></template><template v-else><a-form-item label="项目"><a-select v-model="projectCreateDraft.projectKey" allow-search placeholder="选择项目" :disabled="projectCreateMode === 'edit'"><a-option v-for="project in createProjectOptions" :key="project.key" :value="project.key">{{ project.code }}-{{ project.name }}</a-option></a-select></a-form-item><div class="form-grid"><a-form-item label="期号编号"><a-input v-model="projectCreateDraft.phaseCode" placeholder="例如 03，或填写完整编码" /></a-form-item><a-form-item label="期号名称"><a-input v-model="projectCreateDraft.phaseName" placeholder="填写期号名称" /></a-form-item><a-form-item label="状态"><a-select v-model="projectCreateDraft.phaseStatus"><a-option v-for="status in ['未开始', '进行中', '已完成', '延期']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="负责人"><a-select v-model="projectCreateDraft.phaseOwner" allow-search placeholder="搜索负责人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item></div><a-form-item label="计划时间"><a-range-picker v-model="projectCreateDraft.phaseDatesRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /></a-form-item></template></a-form></a-modal>    <a-modal v-model:visible="phaseFileModalVisible" :title="phaseFileEditingId ? '编辑项目文件' : '添加项目文件'" :ok-text="phaseFileEditingId ? '保存' : '添加'" cancel-text="取消" :ok-button-props="{ disabled: !phaseFileDraft.file }" @ok="savePhaseFile"><div class="phase-file-upload-panel"><input ref="phaseFileInput" class="phase-file-input" type="file" @change="handlePhaseFileChange" /><p v-if="phaseFileDraft.current" class="phase-file-current">当前文件：{{ phaseFileDraft.current.name }}<small>{{ phaseFileDraft.current.type }} · {{ phaseFileDraft.current.size }}</small></p><a-button type="outline" long @click="phaseFileInput?.click()"><IconImport />选择替换文件</a-button><p v-if="phaseFileDraft.file" class="phase-file-selected"><IconFile /><strong>{{ phaseFileDraft.file.name }}</strong><span>{{ formatFileSize(phaseFileDraft.file.size) }}</span></p><p v-else class="phase-file-empty">请选择要添加到当前期号的文件</p></div></a-modal><a-modal v-model:visible="phaseFilePreviewVisible" :title="phaseFilePreview?.name || '文件预览'" width="760px" footer="false" @cancel="closePhaseFilePreview"><div class="phase-file-preview"><iframe v-if="phaseFilePreviewUrl && phaseFilePreview?.type === 'PDF'" :src="phaseFilePreviewUrl" title="文件预览" /><img v-else-if="phaseFilePreviewUrl && phaseFilePreview?.source?.type?.startsWith('image/')" :src="phaseFilePreviewUrl" alt="文件预览" /><div v-else class="phase-file-preview-empty"><IconFile /><strong>{{ phaseFilePreview?.name }}</strong><span>{{ phaseFilePreview?.type }} · {{ phaseFilePreview?.size }}</span><small>当前文件暂不支持在线预览，请使用下载操作查看。</small></div></div></a-modal>
     <a-modal v-model:visible="phaseMemberModalVisible" title="添加期号成员" ok-text="添加" cancel-text="取消" @ok="savePhaseMember"><a-form layout="vertical"><a-form-item label="成员"><a-select v-model="phaseMemberDraft.name" allow-search placeholder="搜索成员姓名"><a-option v-for="name in teamMembers" :key="name" :value="name">{{ name }}</a-option></a-select></a-form-item><a-form-item label="期号角色"><a-select v-model="phaseMemberDraft.role"><a-option value="项目负责人">项目负责人</a-option><a-option value="项目成员">项目成员</a-option></a-select></a-form-item></a-form></a-modal>
     <a-drawer :visible="Boolean(selectedProject)" width="620px" title="项目详情" @cancel="selectedProject = null"><template v-if="selectedProject"><div class="project-detail-hero"><span>{{ selectedProject.customerCode }}-{{ selectedProject.code }}</span><h2>{{ selectedProject.name }}</h2><p>{{ selectedProject.customerCode }}-{{ selectedProject.customerName }}</p></div><section class="project-public-section"><header><div><strong>项目公共资料</strong><small>项目级公共信息，供项目成员协作查看</small></div><div class="project-public-actions"><a-button type="text" size="small" @click="openProjectInfoEditor"><IconEdit />编辑资料</a-button></div></header><div v-if="selectedProjectPublicDocument" class="rich-text-display project-public-document" v-html="selectedProjectPublicDocument" /><a-empty v-else description="暂无项目公共资料" /></section></template></a-drawer>
     <a-modal v-model:visible="projectInfoModalVisible" title="编辑项目公共资料" ok-text="保存" cancel-text="取消" @ok="saveProjectInfo"><a-form layout="vertical"><a-form-item label="资料内容"><RichTextEditor v-model="projectInfoDraft" placeholder="补充客户资料、服务器信息、代码仓库、部署地址等项目公共信息" /></a-form-item></a-form></a-modal>

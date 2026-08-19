@@ -532,15 +532,21 @@ h1, h2, h3, p { margin: 0; }
 .tree-section .arco-tree-node-title-text { min-width: 0; }
 .tree-project-title { min-height: 34px; display: flex; align-items: center; gap: 6px; color: #1d2129; font-size: 13px; font-weight: 600; }
 .tree-project-title > svg { flex: 0 0 auto; color: #4e5969; font-size: 15px; }
-.tree-project-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-project-title > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-project-title b { margin-right: 5px; color: #4e5969; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; }
-.tree-phase-title { min-height: 52px; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; padding-right: 6px; }
-.tree-phase-title > div { min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; }
-.tree-phase-title > div:first-child { width: 100%; }
+.tree-phase-title { min-height: 46px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; padding-right: 2px; }
+.tree-phase-main, .tree-phase-meta { width: 100%; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.tree-phase-main { min-height: 18px; }
 .tree-phase-code { flex: 0 0 auto; color: #86909c; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 600; }
-.tree-phase-name { overflow: hidden; color: #4e5969; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.tree-phase-title .arco-tag { align-self: flex-start; margin: 0; flex: 0 0 auto; }
-.tree-phase-owner { max-width: 100%; overflow: hidden; color: #86909c; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.tree-phase-name { min-width: 0; flex: 1; overflow: hidden; color: #4e5969; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.tree-phase-meta { color: #86909c; font-size: 10px; }
+.tree-phase-meta .arco-tag { margin: 0; padding: 0 4px; line-height: 16px; font-size: 10px; }
+.tree-node-more.arco-btn { width: 22px; height: 22px; min-width: 22px; flex: 0 0 22px; padding: 0; color: #86909c; opacity: 0; }
+.tree-project-title:hover .tree-node-more.arco-btn,
+.tree-phase-title:hover .tree-node-more.arco-btn,
+.tree-section .arco-tree-node-selected .tree-node-more.arco-btn { opacity: 1; }
+.tree-node-more.arco-btn:hover { background: #f2f3f5; color: #165dff; }
+.tree-danger-option { color: #f53f3f; }
 .tree-section .arco-tree-node-selected .tree-phase-code,
 .tree-section .arco-tree-node-selected .tree-phase-name { color: #165dff; }
 .phase-list-section { display: flex; flex-direction: column; gap: 6px; padding: 9px; }
