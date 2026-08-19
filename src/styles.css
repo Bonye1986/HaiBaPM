@@ -340,10 +340,10 @@ h1, h2, h3, p { margin: 0; }
 .phase-stat-progress header { display: flex; justify-content: space-between; margin-bottom: 8px; color: #4e5969; font-size: 11px; }
 .phase-member-hours, .phase-file-list, .phase-member-list { display: flex; flex-direction: column; gap: 8px; }
 .phase-member-hours { margin-top: 18px; }
-.phase-member-hours > div, .phase-file-item, .phase-member-item { min-height: 50px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 4px; background: white; padding: 8px 10px; }
+.phase-member-hours > div, .phase-file-item, .phase-member-item { min-height: 50px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 4px; background: white; padding: 7px 10px; }
 .phase-member-hours > div { justify-content: space-between; background: #f7f8fa; }
 .phase-member-hours span, .phase-member-hours small, .phase-file-item span, .phase-file-item small, .phase-member-item span, .phase-member-item small { display: block; }
-.phase-member-hours small, .phase-file-item small, .phase-member-item small { margin-top: 3px; color: #86909c; font-size: 10px; }
+.phase-member-hours small, .phase-file-item small, .phase-member-item small { margin-top: 1px; color: #86909c; font-size: 10px; line-height: 1.25; }
 .phase-member-hours strong { color: #165dff; }
 .worklog-filters { display: grid; grid-template-columns: minmax(150px, 0.9fr) minmax(250px, 1.4fr); gap: 8px; margin: 14px 0; }
 .worklog-member-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
@@ -369,6 +369,8 @@ h1, h2, h3, p { margin: 0; }
 .worklog-detail section p { margin: 0; color: #4e5969; line-height: 1.8; }
 .phase-file-item > .arco-icon { flex: 0 0 auto; color: #165dff; font-size: 20px; }
 .phase-file-item > span:not(.file-actions), .phase-member-item > span:not(.phase-member-actions) { min-width: 0; flex: 1; }
+.phase-member-item > span:not(.phase-member-actions) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; row-gap: 1px; align-items: center; }
+.phase-member-item > span:not(.phase-member-actions) > b { grid-column: 1 / -1; line-height: 1.25; }
 .phase-file-item b, .phase-member-item b { overflow: hidden; display: block; color: #4e5969; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .phase-file-item > .file-actions { display: inline-flex; align-items: center; gap: 1px; flex: 0 0 auto; margin-left: auto; }
 .file-actions .arco-btn { width: 26px; min-width: 26px; margin: 0; padding: 0; }
