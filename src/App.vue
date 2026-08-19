@@ -4,12 +4,18 @@ import { Message, Modal } from "@arco-design/web-vue";
 import {
   IconArrowRise, IconCalendar, IconCheckCircle, IconClockCircle, IconClose, IconCopy, IconDown, IconExport, IconFile,
   IconFolder, IconInfoCircle, IconLock, IconMenuFold, IconMenuUnfold, IconMore, IconNotification,
-  IconApps, IconDelete, IconEdit, IconImport, IconList, IconMindMapping, IconPlus, IconPoweroff, IconQuestionCircle, IconRefresh, IconSearch, IconSettings, IconUser, IconUserAdd, IconUserGroup,
+  IconApps, IconDelete, IconEdit, IconImport, IconList, IconMindMapping, IconPlus, IconPoweroff, IconQuestionCircle, IconRefresh, IconSafe, IconSearch, IconSettings, IconUser, IconUserAdd, IconUserGroup,
 } from "@arco-design/web-vue/es/icon";
 import { phaseByKey, priorityColors, projects, statusColors, taskSeed } from "./data.js";
 import RichTextEditor from "./components/RichTextEditor.vue";
 
 const navItems = ["工作台", "项目", "任务", "日报", "工时", "团队", "统计"];
+const authStorageKey = "haiba-pm-auth";
+const storedAuthState = sessionStorage.getItem(authStorageKey) || localStorage.getItem(authStorageKey);
+const isAuthenticated = ref(storedAuthState !== "logged-out");
+const loginLoading = ref(false);
+const loginError = ref("");
+const loginDraft = ref({ account: "lixiangmu@haiba.example", password: "", remember: true });
 const statusOptions = ["全部状态", "未完成", "待确认", "已完成"];
 const taskStatusMap = { "未开始": "未完成", "进行中": "未完成", "延期": "未完成" };
 const selectedPhaseKey = ref("1500-01-01");
@@ -224,6 +230,48 @@ watch([normalizedKeyword, filteredProjects], () => {
   expandedKeys.value = filteredProjects.value.flatMap(customer => customer.projects.map(project => project.key));
 });
 function notify(text) { Message.info(text); }
+async function handleLogin() {
+  const account = loginDraft.value.account.trim();
+  if (!account) { loginError.value = "请输入账号"; return; }
+  if (!loginDraft.value.password) { loginError.value = "请输入密码"; return; }
+  loginLoading.value = true;
+  loginError.value = "";
+  try {
+    localStorage.removeItem(authStorageKey);
+    sessionStorage.removeItem(authStorageKey);
+    const storage = loginDraft.value.remember ? localStorage : sessionStorage;
+    storage.setItem(authStorageKey, "authenticated");
+    isAuthenticated.value = true;
+    loginDraft.value.password = "";
+    Message.success("登录成功");
+  } finally {
+    loginLoading.value = false;
+  }
+}
+function handleLogout() {
+  Modal.confirm({
+    title: "退出登录",
+    content: "退出后需要重新登录才能继续访问项目数据。",
+    okText: "退出",
+    cancelText: "取消",
+    onOk: () => {
+      sessionStorage.removeItem(authStorageKey);
+      localStorage.setItem(authStorageKey, "logged-out");
+      selectedTask.value = null;
+      selectedProject.value = null;
+      selectedWorklog.value = null;
+      phaseDrawerVisible.value = false;
+      taskModalVisible.value = false;
+      phaseMemberModalVisible.value = false;
+      phaseFileModalVisible.value = false;
+      helpVisible.value = false;
+      isAuthenticated.value = false;
+      loginError.value = "";
+      loginDraft.value.password = "";
+      Message.success("已退出登录");
+    },
+  });
+}
 function openWorkspaceMore(key) {
   if (key === "import") {
     openTaskImport();
@@ -941,14 +989,30 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
 </script>
 
 <template>
-  <div class="app-shell">
+  <main v-if="!isAuthenticated" class="login-page">
+    <header class="login-header"><span class="login-brand"><IconArrowRise /><strong>海拔PM</strong></span><span>软件项目交付管理平台</span></header>
+    <section class="login-panel" aria-labelledby="login-title">
+      <div class="login-panel-heading"><span class="login-security-icon"><IconSafe /></span><div><h1 id="login-title">登录海拔PM</h1><p>进入项目、期号与任务协作空间</p></div></div>
+      <form class="login-form" @submit.prevent="handleLogin">
+        <label for="login-account">账号</label>
+        <a-input id="login-account" v-model="loginDraft.account" size="large" allow-clear placeholder="手机号、邮箱或成员账号" @input="loginError = ''"><template #prefix><IconUser /></template></a-input>
+        <label for="login-password">密码</label>
+        <a-input-password id="login-password" v-model="loginDraft.password" size="large" allow-clear placeholder="请输入密码" @input="loginError = ''" @keyup.enter="handleLogin"><template #prefix><IconLock /></template></a-input-password>
+        <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
+        <div class="login-options"><a-checkbox v-model="loginDraft.remember">保持登录</a-checkbox><a-button type="text" size="small" @click="notify('请联系系统管理员重置密码')">忘记密码</a-button></div>
+        <a-button class="login-submit" type="primary" html-type="submit" size="large" long :loading="loginLoading">登录</a-button>
+      </form>
+      <footer><IconSafe />登录状态仅保存在当前浏览器，不会保存密码</footer>
+    </section>
+  </main>
+  <div v-else class="app-shell">
     <header class="global-header">
       <a-button class="brand" type="text" @click="notify('海拔PM')"><IconArrowRise /><strong>海拔PM</strong></a-button>
       <a-menu class="global-nav" mode="horizontal" :selected-keys="['项目']" @menu-item-click="key => key !== '项目' && notify(`${key}模块将在后续设计`)"><a-menu-item v-for="item in navItems" :key="item">{{ item }}</a-menu-item></a-menu>
       <div class="header-actions">
         <a-tooltip content="帮助中心"><a-button type="text" @click="helpVisible = true"><IconQuestionCircle />帮助</a-button></a-tooltip>
         <a-dropdown trigger="click"><a-button type="text"><IconNotification />通知</a-button><template #content><div class="notification-panel"><header><strong>通知</strong><a-button type="text" size="mini">全部已读</a-button></header><button><IconClockCircle /><span><strong>任务即将逾期</strong><small>支付回调幂等校验将在 3 天后到期</small></span></button><button><IconCheckCircle /><span><strong>任务等待确认</strong><small>核对审核状态流转已提交确认</small></span></button><button><IconInfoCircle /><span><strong>期号进度更新</strong><small>一期核心交付进度已更新为 68%</small></span></button></div></template></a-dropdown>
-        <a-dropdown trigger="click"><button class="profile-trigger"><a-avatar :size="32">李</a-avatar><span><strong>李项目</strong><small>项目经理</small></span><IconDown /></button><template #content><a-menu class="account-menu"><div class="account-summary"><a-avatar :size="38">李</a-avatar><div><strong>李项目</strong><small>lixiangmu@haiba.example</small></div></div><a-menu-item key="profile" @click="notify('个人信息功能将在后续开放')"><IconUser />个人信息</a-menu-item><a-menu-item key="password" @click="notify('修改密码功能将在后续开放')"><IconLock />修改密码</a-menu-item><a-menu-item key="logout" @click="notify('已退出登录')"><IconPoweroff />退出登录</a-menu-item></a-menu></template></a-dropdown>
+        <a-dropdown trigger="click"><button class="profile-trigger"><a-avatar :size="32">李</a-avatar><span><strong>李项目</strong><small>项目经理</small></span><IconDown /></button><template #content><a-menu class="account-menu"><div class="account-summary"><a-avatar :size="38">李</a-avatar><div><strong>李项目</strong><small>lixiangmu@haiba.example</small></div></div><a-menu-item key="profile" @click="notify('个人信息功能将在后续开放')"><IconUser />个人信息</a-menu-item><a-menu-item key="password" @click="notify('修改密码功能将在后续开放')"><IconLock />修改密码</a-menu-item><a-menu-item key="logout" @click="handleLogout"><IconPoweroff />退出登录</a-menu-item></a-menu></template></a-dropdown>
       </div>
     </header>
 
