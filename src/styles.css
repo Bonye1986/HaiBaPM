@@ -277,8 +277,6 @@ h1, h2, h3, p { margin: 0; }
 .task-title-view-row strong { min-width: 0; flex: 1; overflow: hidden; color: #1d2129; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
 .task-title-view-row .arco-btn, .task-title-edit-row .arco-btn { flex: 0 0 auto; padding: 2px 4px; }
 .task-title-edit-row .arco-input-wrapper { min-width: 0; flex: 1; }
-.task-drawer-heading small { overflow: hidden; color: #86909c; font-size: 11px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
-.task-drawer-path { margin-bottom: 14px; color: #86909c; font-size: 11px; }
 .task-drawer-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .task-drawer-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0 2px; padding: 12px; border: 1px solid var(--line); border-radius: 4px; background: #f7f8fa; }
 .task-drawer-meta span, .task-drawer-meta b { display: block; }
