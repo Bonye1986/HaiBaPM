@@ -583,6 +583,8 @@ h1, h2, h3, p { margin: 0; }
 .modal-context { margin-bottom: 18px; border: 1px solid var(--line); border-radius: 4px; background: #f7f8fa; padding: 10px 12px; }
 .modal-context span, .modal-context strong { display: block; }
 .modal-context span { margin-bottom: 4px; color: #86909c; font-size: 10px; }
+.modal-context-temporary { border-color: #c9dbff; background: #f2f7ff; }
+.modal-context-temporary strong { color: rgb(var(--primary-6)); }
 .password-error { margin: -4px 0 12px; border: 1px solid #f7c8c8; border-radius: 4px; background: #fff3f3; padding: 8px 10px; color: #c33b3b; font-size: 11px; }
 .password-help { display: flex; align-items: center; gap: 6px; margin: 0; color: #86909c; font-size: 11px; line-height: 1.5; }
 .password-help .arco-icon { flex: 0 0 auto; color: rgb(var(--primary-6)); }
