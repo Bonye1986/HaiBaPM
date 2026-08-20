@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { Message, Modal } from "@arco-design/web-vue";
 import {
   IconArrowRise, IconCalendar, IconCheckCircle, IconClockCircle, IconClose, IconCopy, IconDown, IconExport, IconFile,
@@ -63,7 +63,25 @@ const selectedDailyReport = ref(null);
 const workHoursDateRange = ref([]);
 const workHoursMember = ref("全部成员");
 const workHoursKeyword = ref("");
-const teamMembers = ["李项目", "王芳", "张伟", "赵敏", "陈晨", "刘洋"];
+const teamMembers = reactive(["李项目", "王芳", "张伟", "赵敏", "陈晨", "刘洋"]);
+const teamDirectory = ref([
+  { id: "account-1", name: "李项目", account: "lixiangmu@haiba.example", phone: "13800001234", role: "项目经理", type: "内部成员", status: "启用", joinedAt: "2026-06-18", permissions: ["工作台", "项目资料", "任务管理", "团队管理"] },
+  { id: "account-2", name: "王芳", account: "wangfang@haiba.example", phone: "13800001235", role: "产品经理", type: "内部成员", status: "启用", joinedAt: "2026-06-20", permissions: ["工作台", "项目资料", "任务管理", "日报管理"] },
+  { id: "account-3", name: "张伟", account: "zhangwei@haiba.example", phone: "13800001236", role: "服务端开发", type: "内部成员", status: "启用", joinedAt: "2026-06-22", permissions: ["工作台", "任务执行", "文件管理", "工时查看"] },
+  { id: "account-4", name: "赵敏", account: "zhaomin@haiba.example", phone: "13800001237", role: "交互设计", type: "内部成员", status: "启用", joinedAt: "2026-06-25", permissions: ["工作台", "任务执行", "文件管理", "日报管理"] },
+  { id: "account-5", name: "陈晨", account: "chenchen@haiba.example", phone: "13800001238", role: "测试负责人", type: "内部成员", status: "启用", joinedAt: "2026-06-27", permissions: ["工作台", "任务执行", "文件管理", "工时查看"] },
+  { id: "account-6", name: "刘洋", account: "liuyang@haiba.example", phone: "13800001239", role: "交付顾问", type: "内部成员", status: "启用", joinedAt: "2026-06-29", permissions: ["工作台", "项目资料", "文件管理", "日报管理"] },
+  { id: "account-7", name: "周工", account: "zhou.gong@example.com", phone: "13900001240", role: "外包开发", type: "外包成员", status: "启用", joinedAt: "2026-07-04", permissions: ["工作台", "任务执行", "文件管理"] },
+]);
+const teamKeyword = ref("");
+const teamTypeFilter = ref("全部类型");
+const teamMemberModalVisible = ref(false);
+const teamMemberEditingId = ref(null);
+const teamMemberDraft = ref({ name: "", account: "", phone: "", role: "项目成员", type: "内部成员" });
+const teamPermissionsModalVisible = ref(false);
+const teamPermissionsMemberId = ref(null);
+const teamPermissionsDraft = ref([]);
+const teamPermissionOptions = ["工作台", "项目资料", "任务管理", "任务执行", "文件管理", "日报管理", "工时查看", "团队管理", "系统设置"];
 const tasks = ref(taskSeed.map((task, index) => ({
   ...task,
   createdAt: task.createdAt || index,
@@ -293,6 +311,14 @@ const workHoursStats = computed(() => {
   const members = new Set(workHoursFilteredLogs.value.map(log => log.member));
   return { phases: workHoursPhaseRows.value.length, totalHours, members: members.size, average: members.size ? Math.round(totalHours / members.size * 10) / 10 : 0 };
 });
+const filteredTeamMembers = computed(() => {
+  const keyword = teamKeyword.value.trim().toLowerCase();
+  return teamDirectory.value.filter(member => (
+    (teamTypeFilter.value === "全部类型" || member.type === teamTypeFilter.value)
+    && (!keyword || `${member.name}${member.account}${member.phone}${member.role}`.toLowerCase().includes(keyword))
+  ));
+});
+const teamPermissionsMember = computed(() => teamDirectory.value.find(member => member.id === teamPermissionsMemberId.value) || null);
 const phaseTasks = computed(() => tasks.value.filter(task => task.phase === selectedPhaseKey.value));
 const phaseTaskStats = computed(() => ({
   total: phaseTasks.value.length,
@@ -360,7 +386,7 @@ watch([normalizedKeyword, filteredProjects], () => {
 });
 function notify(text) { Message.info(text); }
 function handleNavigation(key) {
-  if (["工作台", "项目", "任务", "日报", "工时"].includes(key)) { activeNav.value = key; return; }
+  if (["工作台", "项目", "任务", "日报", "工时", "团队"].includes(key)) { activeNav.value = key; return; }
   activeNav.value = "项目";
   notify(`${key}模块将在后续设计`);
 }
@@ -1361,6 +1387,82 @@ function deletePhaseMember(member) {
   phaseMemberEditingId.value = null;
   Message.success("期号成员已移除");
 }
+function openTeamMemberModal(member = null) {
+  teamMemberEditingId.value = member?.id || null;
+  teamMemberDraft.value = member ? { name: member.name, account: member.account, phone: member.phone, role: member.role, type: member.type } : { name: "", account: "", phone: "", role: "项目成员", type: "内部成员" };
+  teamMemberModalVisible.value = true;
+}
+function saveTeamMember() {
+  const draftMember = teamMemberDraft.value;
+  const name = draftMember.name.trim();
+  const account = draftMember.account.trim();
+  const phone = draftMember.phone.trim();
+  const role = draftMember.role.trim();
+  if (!name || !account || !role) { Message.warning("请填写姓名、账号和职务"); return false; }
+  if (phone && !/^1[3-9]\d{9}$/.test(phone)) { Message.warning("请输入正确的 11 位手机号"); return false; }
+  if (teamDirectory.value.some(member => member.id !== teamMemberEditingId.value && (member.account === account || member.name === name))) { Message.warning("姓名或账号已存在"); return false; }
+  if (teamMemberEditingId.value) {
+    const previous = teamDirectory.value.find(member => member.id === teamMemberEditingId.value);
+    if (previous && previous.name !== name) {
+      const memberIndex = teamMembers.indexOf(previous.name);
+      if (memberIndex >= 0) teamMembers.splice(memberIndex, 1, name);
+    }
+    teamDirectory.value = teamDirectory.value.map(member => member.id === teamMemberEditingId.value ? { ...member, name, account, phone, role, type: draftMember.type } : member);
+    if (previous?.name === accountProfile.value.nickname) {
+      accountProfile.value = { ...accountProfile.value, account, phone, position: role, nickname: name };
+      profileDraft.value = { ...profileDraft.value, account, phone, position: role, nickname: name };
+      loginDraft.value.account = account;
+    }
+    Message.success("成员账号已更新");
+  } else {
+    teamDirectory.value = [...teamDirectory.value, { id: `account-${Date.now()}`, name, account, phone, role, type: draftMember.type, status: "启用", joinedAt: new Date().toISOString().slice(0, 10), permissions: ["工作台"] }];
+    if (!teamMembers.includes(name)) teamMembers.push(name);
+    Message.success("成员账号已添加");
+  }
+  teamMemberModalVisible.value = false;
+  teamMemberEditingId.value = null;
+  return true;
+}
+function toggleTeamMemberStatus(member) {
+  if (member.name === accountProfile.value.nickname) { Message.warning("不能禁用当前登录账号"); return; }
+  const nextStatus = member.status === "启用" ? "禁用" : "启用";
+  Modal.confirm({
+    title: `${nextStatus}成员账号`,
+    content: `${nextStatus === "禁用" ? "禁用后该成员将无法登录系统。" : "启用后该成员可以重新登录系统。"}是否继续？`,
+    okText: "确认",
+    cancelText: "取消",
+    onOk: () => {
+      teamDirectory.value = teamDirectory.value.map(item => item.id === member.id ? { ...item, status: nextStatus } : item);
+      Message.success(`成员账号已${nextStatus}`);
+    },
+  });
+}
+function deleteTeamMember(member) {
+  if (member.name === accountProfile.value.nickname) { Message.warning("不能删除当前登录账号"); return; }
+  Modal.confirm({
+    title: "删除成员账号",
+    content: `删除“${member.name}”后，该账号将不能继续登录，是否继续？`,
+    okText: "确认删除",
+    cancelText: "取消",
+    onOk: () => {
+      teamDirectory.value = teamDirectory.value.filter(item => item.id !== member.id);
+      Message.success("成员账号已删除");
+    },
+  });
+}
+function openTeamPermissions(member) {
+  teamPermissionsMemberId.value = member.id;
+  teamPermissionsDraft.value = [...(member.permissions || [])];
+  teamPermissionsModalVisible.value = true;
+}
+function saveTeamPermissions() {
+  if (!teamPermissionsDraft.value.length) { Message.warning("请至少分配一项权限"); return false; }
+  teamDirectory.value = teamDirectory.value.map(member => member.id === teamPermissionsMemberId.value ? { ...member, permissions: [...teamPermissionsDraft.value] } : member);
+  teamPermissionsModalVisible.value = false;
+  teamPermissionsMemberId.value = null;
+  Message.success("成员权限已保存");
+  return true;
+}
 function phaseStatusColor(status) { return statusColors[status] || "gray"; }
 </script>
 
@@ -1430,6 +1532,11 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <section class="work-hours-panel"><header><div><h2>期号工时汇总</h2><span>共 {{ workHoursFilteredLogs.length }} 条明细 · 按期号汇总显示</span></div></header><div class="work-hours-table"><div class="work-hours-row work-hours-row-heading"><span>期号</span><span>项目 / 期号名称</span><span>登记工时</span><span>参与成员</span><span>最近登记</span></div><button v-for="phase in workHoursPhaseRows" :key="phase.key" class="work-hours-row" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.code }}</strong><small>{{ phase.status }}</small></span><span><strong>{{ phase.projectName }}</strong><small>{{ phase.name }}</small></span><span><strong>{{ phase.hours }}h</strong><small>{{ phase.logCount }} 条记录</small></span><span>{{ phase.members }} 人</span><span>{{ phase.latest || '暂无记录' }}</span></button><a-empty v-if="!workHoursPhaseRows.length" description="暂无符合条件的期号" /></div></section>
       <section class="work-hours-panel work-hours-detail-panel"><header><div><h2>工时明细</h2><span>包含日期、成员、工时和工作内容，可直接导出当前筛选结果</span></div></header><div class="work-hours-detail-table"><div class="work-hours-detail-row work-hours-detail-row-heading"><span>日期</span><span>期号</span><span>成员</span><span>工时</span><span>工作内容</span></div><button v-for="log in workHoursFilteredLogs" :key="log.id" class="work-hours-detail-row" @click="selectedPhaseKey = log.phaseKey; openWorklogDetail(log)"><span>{{ log.date }}</span><span><strong>{{ log.phase?.code }}</strong><small>{{ log.phase?.name }}</small></span><span>{{ log.member }}</span><strong>{{ log.hours }}h</strong><span>{{ log.content }}</span></button><a-empty v-if="!workHoursFilteredLogs.length" description="暂无符合条件的工时记录" /></div></section>
     </main>
+    <main v-else-if="activeNav === '团队'" class="team-page">
+      <header class="team-page-heading"><div><span class="workbench-eyebrow">账号与权限</span><h1>团队</h1><p>管理内部成员和外包成员账号、登录状态与系统权限。</p></div><a-button type="primary" @click="openTeamMemberModal()"><IconPlus />添加成员</a-button></header>
+      <section class="team-page-toolbar"><a-radio-group v-model="teamTypeFilter" type="button"><a-radio value="全部类型">全部成员 <b>{{ teamDirectory.length }}</b></a-radio><a-radio value="内部成员">内部成员 <b>{{ teamDirectory.filter(member => member.type === '内部成员').length }}</b></a-radio><a-radio value="外包成员">外包成员 <b>{{ teamDirectory.filter(member => member.type === '外包成员').length }}</b></a-radio></a-radio-group><a-input v-model="teamKeyword" class="team-page-search" allow-clear placeholder="搜索姓名、账号或职务"><template #prefix><IconSearch /></template></a-input></section>
+      <section class="team-page-panel"><header><div><h2>成员列表</h2><span>共 {{ filteredTeamMembers.length }} 人 · 可编辑账号和系统权限</span></div></header><div class="team-member-table"><div class="team-member-row team-member-row-heading"><span>成员</span><span>成员类型</span><span>职务</span><span>联系方式</span><span>权限</span><span>状态</span><span>操作</span></div><div v-for="member in filteredTeamMembers" :key="member.id" class="team-member-row"><span class="team-member-identity"><a-avatar :size="34">{{ member.name.slice(0, 1) }}</a-avatar><span><strong>{{ member.name }}</strong><small>{{ member.account }}</small></span></span><span><a-tag :color="member.type === '外包成员' ? 'orange' : 'arcoblue'">{{ member.type }}</a-tag></span><span>{{ member.role }}</span><span><strong>{{ member.phone || '未填写' }}</strong><small>加入于 {{ member.joinedAt }}</small></span><span class="team-member-permissions"><a-tag v-for="permission in member.permissions.slice(0, 3)" :key="permission" color="gray">{{ permission }}</a-tag><small v-if="member.permissions.length > 3">+{{ member.permissions.length - 3 }}</small></span><span><a-tag :color="member.status === '启用' ? 'green' : 'gray'">{{ member.status }}</a-tag></span><span class="team-member-actions"><a-tooltip content="权限设置"><a-button type="text" size="small" aria-label="权限设置" @click="openTeamPermissions(member)"><IconSafe /></a-button></a-tooltip><a-tooltip content="编辑成员"><a-button type="text" size="small" aria-label="编辑成员" @click="openTeamMemberModal(member)"><IconEdit /></a-button></a-tooltip><a-tooltip :content="member.status === '启用' ? '禁用账号' : '启用账号'"><a-button type="text" size="small" :aria-label="member.status === '启用' ? '禁用账号' : '启用账号'" @click="toggleTeamMemberStatus(member)"><IconPoweroff /></a-button></a-tooltip><a-tooltip content="删除成员"><a-button type="text" size="small" status="danger" aria-label="删除成员" @click="deleteTeamMember(member)"><IconDelete /></a-button></a-tooltip></span></div><a-empty v-if="!filteredTeamMembers.length" description="暂无匹配的成员" /></div></section>
+    </main>
     <div v-else class="project-layout">
       <aside class="project-navigator">
         <div class="navigator-heading"><h1>客户 / 项目 + 期号</h1><a-radio-group class="project-view-control" type="button" size="small" v-model="projectView"><a-radio value="tree" title="项目树" aria-label="项目树"><IconMindMapping /></a-radio><a-radio value="list" title="列表" aria-label="列表"><IconList /></a-radio></a-radio-group></div>
@@ -1453,6 +1560,8 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
 
     <a-modal v-model:visible="taskModalVisible" title="新建任务" ok-text="创建任务" cancel-text="取消" :ok-button-props="{ disabled: !draft.title.trim() }" @ok="createTask"><div class="modal-context"><span>项目期号</span><strong>{{ selectedPhase.code }} {{ selectedPhase.projectName }}-{{ selectedPhase.name }}</strong></div><a-form layout="vertical"><a-form-item label="任务名称" required><a-input v-model="draft.title" autofocus placeholder="填写明确、可交付的任务名称" /></a-form-item><div class="form-grid"><a-form-item label="状态"><a-select v-model="draft.status"><a-option v-for="status in ['未完成', '待确认', '已完成']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="确认人"><a-select v-model="draft.confirmer"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item><a-form-item label="执行人"><a-select v-model="draft.executors" multiple :max-tag-count="2" placeholder="可选择多个执行人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item><a-form-item label="优先级"><a-select v-model="draft.priority"><a-option v-for="priority in ['P0', 'P1', 'P2']" :key="priority" :value="priority">{{ priority }}</a-option></a-select></a-form-item><a-form-item label="截止时间"><a-input v-model="draft.due" type="date" /></a-form-item></div><a-form-item label="任务描述"><RichTextEditor v-model="draft.description" placeholder="补充任务目标、验收标准、依赖或交付物" /></a-form-item><section class="subtask-builder"><header><strong>子任务</strong><span>{{ draft.subtasks.length }} 项</span></header><div class="subtask-add-row"><a-input v-model="subtaskDraft" placeholder="添加子任务名称" @keyup.enter="addSubtask" /><a-select v-model="subtaskAssigneeDraft" class="subtask-assignee-select" allow-search placeholder="执行人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-button type="outline" @click="addSubtask"><IconPlus />添加</a-button></div><div v-if="draft.subtasks.length" class="subtask-list"><div v-for="subtask in draft.subtasks" :key="subtask.id"><span><a-tag color="gray">未完成</a-tag>{{ subtask.title }}</span><span class="draft-subtask-actions"><a-select v-model="subtask.assignee" size="small" allow-search><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-button type="text" size="small" aria-label="移除子任务" @click="removeSubtask(subtask)"><IconDelete /></a-button></span></div></div></section></a-form></a-modal>
     <a-drawer v-model:visible="profileDrawerVisible" width="640px" title="个人信息"><div class="profile-avatar-section"><a-avatar :size="72" :image-url="profileDraft.avatarUrl">{{ profileDraft.nickname.trim().slice(0, 1) || '用' }}</a-avatar><div><strong>{{ profileDraft.nickname || '未设置昵称' }}</strong><span>{{ profileDraft.position || '未设置职务' }}</span><small>支持 JPG、PNG 等图片，文件不超过 5 MB</small></div><span class="profile-avatar-actions"><a-button type="outline" size="small" @click="profileAvatarInput?.click()"><IconImport />更换头像</a-button><a-button v-if="profileDraft.avatarUrl" type="text" size="small" @click="profileDraft.avatarUrl = ''"><IconDelete />移除</a-button></span><input ref="profileAvatarInput" class="profile-avatar-input" type="file" accept="image/*" @change="handleProfileAvatarChange" /></div><section class="profile-settings-section"><header><strong>基本资料</strong><span>用于登录识别和项目协作展示</span></header><a-form layout="vertical"><div class="form-grid"><a-form-item label="账号" required><a-input v-model="profileDraft.account" allow-clear placeholder="手机号、邮箱或成员账号" @input="profileError = ''" /></a-form-item><a-form-item label="手机号"><a-input v-model="profileDraft.phone" allow-clear maxlength="11" placeholder="用于安全验证和联系" @input="profileError = ''" /></a-form-item><a-form-item label="昵称" required><a-input v-model="profileDraft.nickname" allow-clear maxlength="20" placeholder="协作中显示的名称" @input="profileError = ''" /></a-form-item><a-form-item label="职务" required><a-input v-model="profileDraft.position" allow-clear maxlength="30" placeholder="例如：项目经理" @input="profileError = ''" /></a-form-item></div></a-form><p v-if="profileError" class="profile-error" role="alert">{{ profileError }}</p></section><section class="profile-settings-section"><header><strong>第三方账号</strong><span>绑定后可使用对应平台授权登录</span></header><div class="profile-security-list"><div><span class="profile-security-icon wecom"><IconSafe /></span><span><b>企业微信</b><small>{{ profileDraft.wecomBound ? '已绑定，可使用企业微信授权登录' : '未绑定' }}</small></span><a-tag :color="profileDraft.wecomBound ? 'green' : 'gray'">{{ profileDraft.wecomBound ? '已绑定' : '未绑定' }}</a-tag><a-button v-if="profileDraft.wecomBound" type="text" size="small" @click="unbindProfileAccount('企业微信')">解绑</a-button><a-button v-else type="outline" size="small" :loading="profileBindingLoading === '企业微信'" :disabled="Boolean(profileBindingLoading)" @click="bindProfileAccount('企业微信')">绑定</a-button></div><div><span class="profile-security-icon wechat"><IconWechat /></span><span><b>微信</b><small>{{ profileDraft.wechatBound ? '已绑定，可使用微信授权登录' : '未绑定' }}</small></span><a-tag :color="profileDraft.wechatBound ? 'green' : 'gray'">{{ profileDraft.wechatBound ? '已绑定' : '未绑定' }}</a-tag><a-button v-if="profileDraft.wechatBound" type="text" size="small" @click="unbindProfileAccount('微信')">解绑</a-button><a-button v-else type="outline" size="small" :loading="profileBindingLoading === '微信'" :disabled="Boolean(profileBindingLoading)" @click="bindProfileAccount('微信')">绑定</a-button></div></div></section><section class="profile-settings-section"><header><strong>登录安全</strong><span>定期更新密码可以降低账号风险</span></header><div class="profile-security-list"><div><span class="profile-security-icon password"><IconLock /></span><span><b>登录密码</b><small>已设置，修改后请使用新密码登录</small></span><a-tag color="green">已设置</a-tag><a-button type="outline" size="small" @click="openPasswordModal">修改密码</a-button></div></div></section><template #footer><div class="drawer-footer"><a-button @click="profileDrawerVisible = false">取消</a-button><a-button type="primary" @click="saveProfile">保存</a-button></div></template></a-drawer>
+    <a-modal v-model:visible="teamMemberModalVisible" :title="teamMemberEditingId ? '编辑成员账号' : '添加成员账号'" ok-text="保存" cancel-text="取消" :on-before-ok="saveTeamMember"><a-form layout="vertical"><div class="form-grid"><a-form-item label="姓名" required><a-input v-model="teamMemberDraft.name" allow-clear placeholder="填写成员姓名" /></a-form-item><a-form-item label="成员类型" required><a-select v-model="teamMemberDraft.type"><a-option value="内部成员">内部成员</a-option><a-option value="外包成员">外包成员</a-option></a-select></a-form-item><a-form-item label="账号" required><a-input v-model="teamMemberDraft.account" allow-clear placeholder="邮箱或成员账号" /></a-form-item><a-form-item label="手机号"><a-input v-model="teamMemberDraft.phone" allow-clear maxlength="11" placeholder="11 位手机号" /></a-form-item></div><a-form-item label="职务" required><a-input v-model="teamMemberDraft.role" allow-clear placeholder="例如：前端开发、客户顾问" /></a-form-item><p class="team-member-modal-note"><IconInfoCircle />新成员默认分配“工作台”权限，可在成员列表中继续设置权限。</p></a-form></a-modal>
+    <a-modal v-model:visible="teamPermissionsModalVisible" title="权限设置" ok-text="保存权限" cancel-text="取消" :on-before-ok="saveTeamPermissions"><div v-if="teamPermissionsMember" class="team-permission-modal"><header><a-avatar :size="38">{{ teamPermissionsMember.name.slice(0, 1) }}</a-avatar><div><strong>{{ teamPermissionsMember.name }}</strong><small>{{ teamPermissionsMember.account }} · {{ teamPermissionsMember.type }}</small></div></header><a-checkbox-group v-model="teamPermissionsDraft" class="team-permission-options"><a-checkbox v-for="permission in teamPermissionOptions" :key="permission" :value="permission">{{ permission }}</a-checkbox></a-checkbox-group><p class="team-member-modal-note"><IconInfoCircle />权限变更会影响该成员可访问的页面和操作范围。</p></div></a-modal>
     <a-modal v-model:visible="passwordModalVisible" title="修改密码" ok-text="保存密码" cancel-text="取消" :on-before-ok="submitPasswordChange"><a-form layout="vertical" @submit.prevent="submitPasswordChange"><a-form-item label="当前密码" required><a-input-password v-model="passwordDraft.currentPassword" allow-clear autocomplete="current-password" placeholder="请输入当前密码" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><a-form-item label="新密码" required><a-input-password v-model="passwordDraft.newPassword" allow-clear autocomplete="new-password" placeholder="至少 8 个字符" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><a-form-item label="确认新密码" required><a-input-password v-model="passwordDraft.confirmPassword" allow-clear autocomplete="new-password" placeholder="请再次输入新密码" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><p v-if="passwordError" class="password-error" role="alert">{{ passwordError }}</p><p class="password-help"><IconInfoCircle />当前为演示环境，密码不会保存在浏览器本地。</p></a-form></a-modal>
     <a-modal v-model:visible="laneModalVisible" :title="laneEditingKey ? '编辑看板列' : '添加看板列'" ok-text="保存" cancel-text="取消" :ok-button-props="{ disabled: !laneDraft.title.trim() }" @ok="saveLane"><a-form layout="vertical"><a-form-item label="列名称" required><a-input v-model="laneDraft.title" maxlength="20" show-word-limit placeholder="例如：待客户确认" /></a-form-item><a-form-item label="列颜色"><a-select v-model="laneDraft.color"><a-option v-for="option in laneColorOptions" :key="option.value" :value="option.value">{{ option.label }}</a-option></a-select></a-form-item></a-form></a-modal>
 
