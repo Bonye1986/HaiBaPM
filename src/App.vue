@@ -274,11 +274,17 @@ const dashboardPhaseRows = computed(() => {
   })));
   return rows;
 });
-const dashboardTasks = computed(() => {
+const dashboardDate = computed(() => new Date().toISOString().slice(0, 10));
+const dashboardTaskRows = computed(() => {
   const phaseKeys = new Set(dashboardPhaseRows.value.map(phase => phase.key));
   const currentUser = accountProfile.value.nickname;
-  return tasks.value.filter(task => phaseKeys.has(task.phase) || (!task.phase && (isManagementRole.value || [task.owner, task.createdBy, task.confirmer, ...(task.executors || [])].includes(currentUser)))).sort((a, b) => ({ P0: 0, P1: 1, P2: 2 }[a.priority] ?? 3) - ({ P0: 0, P1: 1, P2: 2 }[b.priority] ?? 3) || (a.createdAt ?? 0) - (b.createdAt ?? 0)).slice(0, 8);
+  return tasks.value.filter(task => {
+    const related = [task.owner, task.createdBy, task.confirmer, ...(task.executors || [])].includes(currentUser);
+    return (task.phase ? phaseKeys.has(task.phase) : isManagementRole.value || related) && (isManagementRole.value || related);
+  }).sort((a, b) => ({ P0: 0, P1: 1, P2: 2 }[a.priority] ?? 3) - ({ P0: 0, P1: 1, P2: 2 }[b.priority] ?? 3) || (a.createdAt ?? 0) - (b.createdAt ?? 0));
 });
+const dashboardTasks = computed(() => dashboardTaskRows.value.slice(0, 8));
+const dashboardTodayTodos = computed(() => dashboardTaskRows.value.filter(task => task.status !== "已完成" && task.due <= dashboardDate.value).sort((a, b) => a.due.localeCompare(b.due) || ({ P0: 0, P1: 1, P2: 2 }[a.priority] ?? 3) - ({ P0: 0, P1: 1, P2: 2 }[b.priority] ?? 3)));
 const dashboardStats = computed(() => {
   const phases = dashboardPhaseRows.value;
   const total = phases.length;
@@ -286,7 +292,6 @@ const dashboardStats = computed(() => {
   const delayed = phases.filter(phase => phase.status === "延期").length;
   return { total, inProgress: phases.filter(phase => phase.status === "进行中").length, completed, delayed, delayRate: total ? Math.round(delayed / total * 100) : 0, completionRate: total ? Math.round(completed / total * 100) : 0 };
 });
-const dashboardDate = computed(() => new Date().toISOString().slice(0, 10));
 const statsProjectOptions = computed(() => {
   const projectsByKey = new Map();
   dashboardPhaseRows.value.forEach(phase => {
@@ -1750,6 +1755,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
     <main v-if="activeNav === '工作台'" class="workbench-page">
       <header class="workbench-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · {{ dashboardDate }}</span><h1>工作台</h1><p>{{ isManagementRole ? '查看全部项目期号、任务与交付风险。' : '聚焦与你相关的项目期号和待办任务。' }}</p></div><a-button type="primary" @click="activeNav = '项目'"><IconApps />进入项目</a-button></header>
       <section class="workbench-stat-grid"><article><span>项目期号数量</span><strong>{{ dashboardStats.total }}</strong><small>当前可见范围</small></article><article><span>进行中期号数量</span><strong>{{ dashboardStats.inProgress }}</strong><small>正在交付</small></article><article><span>已完成期号数量</span><strong>{{ dashboardStats.completed }}</strong><small>已完成</small></article><article><span>延期期号数量</span><strong>{{ dashboardStats.delayed }}</strong><small>需要关注</small></article><article><span>项目延期率</span><strong>{{ dashboardStats.delayRate }}%</strong><small>延期 / 全部期号</small></article><article><span>项目完成率</span><strong>{{ dashboardStats.completionRate }}%</strong><small>完成 / 全部期号</small></article></section>
+      <section class="workbench-panel workbench-todo-panel"><header><div><h2>今日待办</h2><span>{{ dashboardTodayTodos.length }} 项待处理 · {{ dashboardTodayTodos.filter(task => task.due < dashboardDate).length }} 项已逾期</span></div><a-button type="text" @click="activeNav = '任务'"><IconList />查看全部任务</a-button></header><div class="workbench-todo-list"><button v-for="task in dashboardTodayTodos.slice(0, 6)" :key="task.id" class="workbench-todo-item" @click="task.phase && (selectedPhaseKey = task.phase); onTaskRowClick(task)"><span class="workbench-todo-marker" :class="{ pending: task.status === '待确认', overdue: task.due < dashboardDate }"><IconCheckCircle v-if="task.status === '待确认'" /><IconClockCircle v-else /></span><span class="workbench-todo-copy"><span><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag><a-tag :color="phaseStatusColor(task.status)">{{ task.status === '待确认' ? '待确认' : '待完成' }}</a-tag></span><strong>{{ task.title }}</strong><small v-if="phaseByKey(task.phase)">{{ phaseByKey(task.phase)?.code }} · {{ phaseByKey(task.phase)?.name }} · {{ task.owner }}</small><small v-else>临时任务 · {{ task.owner }}</small></span><span class="workbench-todo-due" :class="{ overdue: task.due < dashboardDate }"><strong>{{ task.due < dashboardDate ? '已逾期' : '今日截止' }}</strong><small>{{ task.due }}</small></span></button><a-empty v-if="!dashboardTodayTodos.length" description="今日暂无待办" /></div></section>
       <section class="workbench-panel"><header><div><h2>任务列表</h2><span>按优先级和创建时间排序</span></div><a-button type="text" @click="activeNav = '任务'"><IconList />查看全部</a-button></header><div class="workbench-task-table"><div class="workbench-row workbench-row-heading"><span>任务名称</span><span>项目期号</span><span>负责人</span><span>状态</span><span>截止时间</span></div><button v-for="task in dashboardTasks" :key="task.id" class="workbench-row" @click="task.phase && (selectedPhaseKey = task.phase); onTaskRowClick(task)"><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span v-if="phaseByKey(task.phase)">{{ phaseByKey(task.phase)?.code }} · {{ phaseByKey(task.phase)?.name }}</span><span v-else>临时任务</span><span>{{ task.owner }}</span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span>{{ task.due }}</span></button><a-empty v-if="!dashboardTasks.length" description="暂无相关任务" /></div></section>
       <section class="workbench-panel"><header><div><h2>期号列表</h2><span>按当前账号权限展示</span></div><a-button type="text" @click="activeNav = '项目'"><IconFolder />查看项目</a-button></header><div class="workbench-phase-grid"><button v-for="phase in dashboardPhaseRows" :key="phase.key" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.customerCode }}-{{ phase.projectCode }} · {{ phase.projectName }}</strong><small>{{ phase.code }} · {{ phase.name }}</small></span><span class="workbench-phase-meta"><small>负责人：{{ phase.owner }}</small><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></span></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section>
     </main>
