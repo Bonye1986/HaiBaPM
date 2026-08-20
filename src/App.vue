@@ -263,6 +263,30 @@ const phaseListGroups = computed(() => {
   return [...groups.values()];
 });
 const isManagementRole = computed(() => /管理员|管理层|总经理|副总|总监|CEO|项目经理|部门经理/.test(accountProfile.value.position || ""));
+const currentAccountMember = computed(() => teamDirectory.value.find(member => member.account === accountProfile.value.account || member.name === accountProfile.value.nickname));
+const currentPermissions = computed(() => currentAccountMember.value?.permissions || ["工作台"]);
+const navigationPermissions = {
+  "项目": ["项目资料"],
+  "任务": ["任务管理", "任务执行", "任务查看"],
+  "日报": ["日报管理"],
+  "工时": ["工时查看"],
+  "团队": ["团队管理"],
+  "统计": ["统计查看"],
+};
+function hasPermission(permission) {
+  return isManagementRole.value || currentPermissions.value.includes(permission);
+}
+function canAccessNavigation(item) {
+  if (item === "工作台") return true;
+  const required = navigationPermissions[item] || [];
+  return required.some(hasPermission);
+}
+const visibleNavItems = computed(() => navItems.filter(canAccessNavigation));
+const canManageProject = computed(() => hasPermission("项目资料"));
+const canManageTasks = computed(() => hasPermission("任务管理") || hasPermission("任务执行"));
+const canManageReports = computed(() => hasPermission("日报管理"));
+const canManageTeam = computed(() => hasPermission("团队管理"));
+const canManageSystem = computed(() => hasPermission("系统设置"));
 const dashboardPhaseRows = computed(() => {
   projectRevision.value;
   const rows = [];
@@ -524,7 +548,11 @@ watch([normalizedKeyword, filteredProjects], () => {
 });
 function notify(text) { Message.info(text); }
 function handleNavigation(key) {
-  if (["工作台", "项目", "任务", "日报", "工时", "团队", "统计"].includes(key)) { activeNav.value = key; return; }
+  if (["工作台", "项目", "任务", "日报", "工时", "团队", "统计"].includes(key)) {
+    if (!canAccessNavigation(key)) { Message.warning(`当前账号没有访问${key}页面的权限`); return; }
+    activeNav.value = key;
+    return;
+  }
   activeNav.value = "项目";
   notify(`${key}模块将在后续设计`);
 }
@@ -595,7 +623,10 @@ function openProfileDrawer() {
   profileError.value = "";
   profileDrawerVisible.value = true;
 }
-function openSystemSettings() { systemSettingsDrawerVisible.value = true; }
+function openSystemSettings() {
+  if (!canManageSystem.value) { Message.warning("当前账号没有系统设置权限"); return; }
+  systemSettingsDrawerVisible.value = true;
+}
 function handleSystemLogoChange(event) {
   const file = event.target.files?.[0];
   event.target.value = "";
@@ -614,6 +645,7 @@ function saveSystemSettings() {
   Message.success("系统设置已保存");
 }
 function openProjectTemplateModal(template = null) {
+  if (!canManageSystem.value) { Message.warning("当前账号没有项目模板管理权限"); return; }
   projectTemplateEditingId.value = template?.id || null;
   projectTemplateDraft.value = template
     ? { name: template.name, description: template.description }
@@ -831,6 +863,7 @@ function emptyProjectCreateDraft(customerKey = selectedCustomerKey.value || proj
   return { customerKey, projectKey: "", projectCode: "", projectName: "", phaseCode: "", phaseName: "", phaseStatus: "未开始", phaseOwner: "李项目", phaseDatesRange: [] };
 }
 function openProjectCreateModal() {
+  if (!canManageProject.value) { Message.warning("当前账号没有项目管理权限"); return; }
   projectCreateMode.value = "create";
   projectCreateEditingKey.value = "";
   projectCreateType.value = "project";
@@ -838,6 +871,7 @@ function openProjectCreateModal() {
   projectCreateModalVisible.value = true;
 }
 function openProjectEdit(project) {
+  if (!canManageProject.value) { Message.warning("当前账号没有项目管理权限"); return; }
   const current = projectByKey(project.key) || project;
   projectCreateMode.value = "edit";
   projectCreateEditingKey.value = current.key;
@@ -850,6 +884,7 @@ function openProjectEdit(project) {
   projectCreateModalVisible.value = true;
 }
 function openPhaseEdit(phase) {
+  if (!canManageProject.value) { Message.warning("当前账号没有项目管理权限"); return; }
   const current = phaseByKey(phase.key) || phase;
   projectCreateMode.value = "edit";
   projectCreateEditingKey.value = current.key;
@@ -865,18 +900,42 @@ function openPhaseEdit(phase) {
   };
   projectCreateModalVisible.value = true;
 }
+function purgePhaseArtifacts(phaseKeys) {
+  const deletedPhaseKeys = new Set(phaseKeys);
+  const removedTaskIds = new Set(tasks.value.filter(task => deletedPhaseKeys.has(task.phase)).map(task => task.id));
+  const omitDeletedPhaseKeys = source => Object.fromEntries(Object.entries(source).filter(([key]) => !deletedPhaseKeys.has(key)));
+
+  tasks.value = tasks.value.filter(task => !deletedPhaseKeys.has(task.phase));
+  boardOrder.value = boardOrder.value.filter(taskId => !removedTaskIds.has(taskId));
+  dailyReports.value = dailyReports.value.filter(report => !deletedPhaseKeys.has(report.phase));
+  phaseFiles.value = omitDeletedPhaseKeys(phaseFiles.value);
+  phaseMembers.value = omitDeletedPhaseKeys(phaseMembers.value);
+  phaseWorklogs.value = omitDeletedPhaseKeys(phaseWorklogs.value);
+  phaseOverrides.value = omitDeletedPhaseKeys(phaseOverrides.value);
+  recentPhaseKeys.value = recentPhaseKeys.value.filter(key => !deletedPhaseKeys.has(key));
+  taskActivities.value = Object.fromEntries(Object.entries(taskActivities.value).filter(([taskId]) => !removedTaskIds.has(taskId)));
+  taskComments.value = Object.fromEntries(Object.entries(taskComments.value).filter(([taskId]) => !removedTaskIds.has(taskId)));
+
+  if (selectedTask.value && deletedPhaseKeys.has(selectedTask.value.phase)) selectedTask.value = null;
+  if (selectedDailyReport.value && deletedPhaseKeys.has(selectedDailyReport.value.phase)) selectedDailyReport.value = null;
+}
 function removeProject(project) {
+  if (!canManageProject.value) { Message.warning("当前账号没有项目管理权限"); return; }
   const current = projectByKey(project.key) || project;
   const customer = projects.find(item => item.key === current.customerCode);
   if (!customer) return;
   const target = customer.projects.find(item => item.key === current.key);
   if (!target) return;
+  const phaseKeys = target.phases.map(phase => phase.key);
+  const linkedTaskCount = tasks.value.filter(task => phaseKeys.includes(task.phase)).length;
+  const linkedReportCount = dailyReports.value.filter(report => phaseKeys.includes(report.phase)).length;
   Modal.confirm({
     title: "删除项目",
-    content: target.phases.length ? `“${target.name}”包含 ${target.phases.length} 个期号，删除后将一并移除，是否继续？` : `确定删除项目“${target.name}”吗？`,
+    content: target.phases.length ? `将删除“${target.name}”及 ${target.phases.length} 个期号、${linkedTaskCount} 项关联任务和 ${linkedReportCount} 份日报，相关文件、成员与工时演示数据也会清理。此操作不可恢复。` : `确定删除项目“${target.name}”吗？`,
     okText: "删除",
     cancelText: "取消",
     onOk: () => {
+      purgePhaseArtifacts(phaseKeys);
       customer.projects = customer.projects.filter(item => item.key !== target.key);
       projectRevision.value += 1;
       if (selectedProject.value?.key === target.key) selectedProject.value = null;
@@ -887,16 +946,20 @@ function removeProject(project) {
   });
 }
 function removePhase(phase) {
+  if (!canManageProject.value) { Message.warning("当前账号没有项目管理权限"); return; }
   const current = phaseByKey(phase.key) || phase;
   const customer = projects.find(item => item.key === current.customerCode);
   const target = customer?.projects.find(item => item.key === `${current.customerCode}-${current.projectCode}`);
   if (!target) return;
+  const linkedTaskCount = tasks.value.filter(task => task.phase === current.key).length;
+  const linkedReportCount = dailyReports.value.filter(report => report.phase === current.key).length;
   Modal.confirm({
     title: "删除期号",
-    content: `确定删除期号“${current.name}”吗？该期号下的任务和资料入口也会移除。`,
+    content: `将删除期号“${current.name}”及 ${linkedTaskCount} 项关联任务、${linkedReportCount} 份日报，相关文件、成员与工时演示数据也会清理。此操作不可恢复。`,
     okText: "删除",
     cancelText: "取消",
     onOk: () => {
+      purgePhaseArtifacts([current.key]);
       target.phases = target.phases.filter(item => item.key !== current.key);
       projectRevision.value += 1;
       if (selectedPhaseKey.value === current.key) {
@@ -1234,6 +1297,7 @@ function dropLane(lane, event) {
   draggedLaneKey.value = null;
 }
 function openTaskModal() {
+  if (!canManageTasks.value) { Message.warning("当前账号没有创建任务权限"); return; }
   draft.value = emptyDraft();
   subtaskDraft.value = "";
   subtaskAssigneeDraft.value = "李项目";
@@ -1500,6 +1564,7 @@ function preparePhaseDraft() {
   phaseDraft.value = { ...selectedPhase.value, phaseNumber: selectedPhase.value.code.split("-").at(-1), datesRange: parsePhaseDateRange(selectedPhase.value.dates) };
 }
 function openPhaseSettings() {
+  if (!canManageProject.value) { Message.warning("当前账号没有期号管理权限"); return; }
   phaseSettingsTab.value = "basic";
   phaseEditing.value = true;
   preparePhaseDraft();
@@ -1553,6 +1618,8 @@ const selectedDailyReportPhaseTasks = computed(() => selectedDailyReport.value ?
 function dailyReportDisplayName(report) { return `${report.sender}的日报 ${report.date}`; }
 function openDailyReport(report) { selectedDailyReport.value = report; }
 function openDailyReportModal(report = null) {
+  if (!canManageReports.value) { Message.warning("当前账号没有日报管理权限"); return; }
+  if (report && !isManagementRole.value && report.sender !== accountProfile.value.nickname) { Message.warning("只能编辑自己的日报"); return; }
   dailyReportEditingId.value = report?.id || null;
   const currentDate = report?.date || new Date().toISOString().slice(0, 10);
   dailyReportDraft.value = report ? { ...report } : { name: `${accountProfile.value.nickname}的日报 ${currentDate}`, sender: accountProfile.value.nickname, date: currentDate, hours: 0, phase: dashboardPhaseRows.value[0]?.key || "", summary: "", nextPlan: "", blockers: "", status: "草稿" };
@@ -1579,6 +1646,7 @@ function saveDailyReport() {
   dailyReportModalVisible.value = false;
 }
 function deleteDailyReport(report) {
+  if (!canManageReports.value || (!isManagementRole.value && report.sender !== accountProfile.value.nickname)) { Message.warning("当前账号没有删除该日报的权限"); return; }
   Modal.confirm({ title: "删除日报", content: `确定删除“${dailyReportDisplayName(report)}”吗？`, okText: "删除", cancelText: "取消", onOk: () => { dailyReports.value = dailyReports.value.filter(item => item.id !== report.id); if (selectedDailyReport.value?.id === report.id) selectedDailyReport.value = null; Message.success("日报已删除"); } });
 }
 function handleWorklogClick(event) {
@@ -1590,8 +1658,8 @@ function handleWorklogClick(event) {
 }
 onMounted(() => document.addEventListener("click", handleWorklogClick));
 onBeforeUnmount(() => document.removeEventListener("click", handleWorklogClick));
-function openPhaseFileModal() { phaseFileEditingId.value = null; phaseFileDraft.value = { file: null, current: null }; if (phaseFileInput.value) phaseFileInput.value.value = ""; phaseFileModalVisible.value = true; }
-function openPhaseFileEdit(file) { phaseFileEditingId.value = file.id; phaseFileDraft.value = { file: null, current: file }; if (phaseFileInput.value) phaseFileInput.value.value = ""; phaseFileModalVisible.value = true; }
+function openPhaseFileModal() { if (!hasPermission("文件管理")) { Message.warning("当前账号没有文件管理权限"); return; } phaseFileEditingId.value = null; phaseFileDraft.value = { file: null, current: null }; if (phaseFileInput.value) phaseFileInput.value.value = ""; phaseFileModalVisible.value = true; }
+function openPhaseFileEdit(file) { if (!hasPermission("文件管理")) { Message.warning("当前账号没有文件管理权限"); return; } phaseFileEditingId.value = file.id; phaseFileDraft.value = { file: null, current: file }; if (phaseFileInput.value) phaseFileInput.value.value = ""; phaseFileModalVisible.value = true; }
 function formatFileSize(bytes) {
   if (!bytes) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
@@ -1629,6 +1697,7 @@ function closePhaseFilePreview() {
   phaseFilePreviewVisible.value = false;
 }
 function removePhaseFile(file) {
+  if (!hasPermission("文件管理")) { Message.warning("当前账号没有文件管理权限"); return; }
   Modal.confirm({
     title: "移除项目文件",
     content: `确定移除“${file.name}”吗？`,
@@ -1641,6 +1710,7 @@ function removePhaseFile(file) {
   });
 }
 function openPhaseMemberModal() {
+  if (!canManageProject.value) { Message.warning("当前账号没有期号成员管理权限"); return; }
   phaseMemberEditingId.value = null;
   phaseMemberDraft.value = { memberType: "internal", name: "李项目", baseRole: "项目成员", externalType: "客户", contact: "", inviteLink: "", permissions: ["项目资料", "任务执行"] };
   phaseMemberModalVisible.value = true;
@@ -1727,6 +1797,7 @@ function deletePhaseMember(member) {
   });
 }
 function openTeamMemberModal(member = null) {
+  if (!canManageTeam.value) { Message.warning("当前账号没有团队管理权限"); return; }
   teamMemberEditingId.value = member?.id || null;
   teamMemberDraft.value = member ? { name: member.name, account: member.account, phone: member.phone, role: member.role, type: member.type, status: member.status || "启用", password: "", wechatBound: Boolean(member.wechatBound), wecomBound: Boolean(member.wecomBound) } : { name: "", account: "", phone: "", role: "项目成员", type: "内部成员", status: "启用", password: "", wechatBound: false, wecomBound: false };
   teamMemberModalVisible.value = true;
@@ -1765,6 +1836,7 @@ function saveTeamMember() {
   return true;
 }
 function toggleTeamMemberStatus(member) {
+  if (!canManageTeam.value) { Message.warning("当前账号没有团队管理权限"); return; }
   if (member.name === accountProfile.value.nickname) { Message.warning("不能禁用当前登录账号"); return; }
   const nextStatus = member.status === "启用" ? "禁用" : "启用";
   Modal.confirm({
@@ -1779,6 +1851,7 @@ function toggleTeamMemberStatus(member) {
   });
 }
 function deleteTeamMember(member) {
+  if (!canManageTeam.value) { Message.warning("当前账号没有团队管理权限"); return; }
   if (member.name === accountProfile.value.nickname) { Message.warning("不能删除当前登录账号"); return; }
   Modal.confirm({
     title: "删除成员账号",
@@ -1792,6 +1865,7 @@ function deleteTeamMember(member) {
   });
 }
 function openTeamPermissions(member) {
+  if (!canManageTeam.value) { Message.warning("当前账号没有团队管理权限"); return; }
   teamPermissionsMemberId.value = member.id;
   teamPermissionsDraft.value = [...(member.permissions || [])];
   teamPermissionsModalVisible.value = true;
@@ -1832,9 +1906,9 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
   <div v-else class="app-shell">
     <header class="global-header">
       <a-button class="brand" type="text" @click="notify(systemSettingsDraft.name)"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" class="brand-logo" /><span v-else class="pm-logo-mark" aria-label="PM">PM</span><strong>{{ systemSettingsDraft.name }}</strong></a-button>
-      <a-menu class="global-nav" mode="horizontal" :selected-keys="[activeNav]" @menu-item-click="handleNavigation"><a-menu-item v-for="item in navItems" :key="item">{{ item }}</a-menu-item></a-menu>
+      <a-menu class="global-nav" mode="horizontal" :selected-keys="[activeNav]" @menu-item-click="handleNavigation"><a-menu-item v-for="item in visibleNavItems" :key="item">{{ item }}</a-menu-item></a-menu>
       <div class="header-actions">
-        <a-tooltip content="系统设置"><a-button type="text" aria-label="系统设置" @click="openSystemSettings"><IconSettings />设置</a-button></a-tooltip>
+        <a-tooltip v-if="canManageSystem" content="系统设置"><a-button type="text" aria-label="系统设置" @click="openSystemSettings"><IconSettings />设置</a-button></a-tooltip>
         <a-tooltip content="帮助中心"><a-button type="text" @click="helpVisible = true"><IconQuestionCircle />帮助</a-button></a-tooltip>
         <a-dropdown trigger="click"><a-button type="text"><IconNotification />通知</a-button><template #content><div class="notification-panel"><header><strong>通知</strong><a-button type="text" size="mini">全部已读</a-button></header><button><IconClockCircle /><span><strong>任务即将逾期</strong><small>支付回调幂等校验将在 3 天后到期</small></span></button><button><IconCheckCircle /><span><strong>任务等待确认</strong><small>核对审核状态流转已提交确认</small></span></button><button><IconInfoCircle /><span><strong>期号进度更新</strong><small>一期核心交付进度已更新为 68%</small></span></button></div></template></a-dropdown>
         <a-dropdown trigger="click"><button class="profile-trigger"><a-avatar :size="32" :image-url="accountProfile.avatarUrl">{{ profileInitial }}</a-avatar><span><strong>{{ accountProfile.nickname }}</strong><small>{{ accountProfile.position }}</small></span><IconDown /></button><template #content><a-menu class="account-menu"><div class="account-summary"><a-avatar :size="38" :image-url="accountProfile.avatarUrl">{{ profileInitial }}</a-avatar><div><strong>{{ accountProfile.nickname }}</strong><small>{{ accountProfile.account }}</small></div></div><a-menu-item key="profile" @click="openProfileDrawer"><IconUser />个人信息</a-menu-item><a-menu-item key="password" @click="openPasswordModal"><IconLock />修改密码</a-menu-item><a-menu-item key="logout" @click="handleLogout"><IconPoweroff />退出登录</a-menu-item></a-menu></template></a-dropdown>
@@ -1849,7 +1923,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <section class="workbench-panel"><header><div><h2>期号列表</h2><span>按当前账号权限展示</span></div><a-button type="text" @click="activeNav = '项目'"><IconFolder />查看项目</a-button></header><div class="workbench-phase-grid"><button v-for="phase in dashboardPhaseRows" :key="phase.key" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.customerCode }}-{{ phase.projectCode }} · {{ phase.projectName }}</strong><small>{{ phase.code }} · {{ phase.name }}</small></span><span class="workbench-phase-meta"><small>负责人：{{ phase.owner }}</small><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></span></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section>
     </main>
     <main v-else-if="activeNav === '任务'" class="task-page">
-      <header class="task-page-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 任务协作</span><h1>任务</h1><p>{{ isManagementRole ? '查看全部任务并按条件快速定位。' : '只显示与你发起、执行或确认相关的任务。' }}</p></div><a-button type="primary" @click="openTaskModal"><IconPlus />新建任务</a-button></header>
+      <header class="task-page-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 任务协作</span><h1>任务</h1><p>{{ isManagementRole ? '查看全部任务并按条件快速定位。' : '只显示与你发起、执行或确认相关的任务。' }}</p></div><a-button v-if="canManageTasks" type="primary" @click="openTaskModal"><IconPlus />新建任务</a-button></header>
       <section class="task-page-filters"><a-radio-group v-model="taskPageType" type="button"><a-radio value="全部">全部</a-radio><a-radio value="我发起的">我发起的</a-radio><a-radio value="我执行的">我执行的</a-radio><a-radio value="我确认的">我确认的</a-radio></a-radio-group><a-select v-model="taskPageStatus" class="task-page-status-filter"><a-option value="全部">全部状态</a-option><a-option value="未完成">未完成</a-option><a-option value="待确认">待确认</a-option><a-option value="已完成">已完成</a-option></a-select><a-date-picker v-model="taskPageDueDate" value-format="YYYY-MM-DD" format="YYYY-MM-DD" placeholder="截止时间" allow-clear /><a-input v-model="taskPageKeyword" class="task-page-search" allow-clear placeholder="搜索期号或任务名称"><template #prefix><IconSearch /></template></a-input></section>
         <section class="task-page-panel"><header><div><h2>任务列表</h2><span>共 {{ taskPageRows.length }} 项 · 默认按优先级和创建时间排序</span></div></header><div class="task-page-table"><div class="task-page-row task-page-row-heading"><span>完成</span><span>任务名称</span><span>项目期号</span><span>任务类型</span><span>参与角色</span><span>优先级</span><span>状态</span><span>截止时间</span></div><button v-for="task in taskPageRows" :key="task.id" class="task-page-row" @click="task.phase && (selectedPhaseKey = task.phase); onTaskRowClick(task)"><span class="task-page-check"><a-checkbox :model-value="task.status === '已完成'" :indeterminate="task.status === '待确认'" :disabled="!taskChecklistAction(task)" :aria-label="`${task.title}完成状态`" @click.stop @change="handleTaskChecklistChange(task)" /></span><span data-label="任务名称"><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span v-if="phaseByKey(task.phase)" data-label="项目期号"><strong>{{ phaseByKey(task.phase)?.code }}</strong><small>{{ phaseByKey(task.phase)?.name }}</small></span><span v-else data-label="项目期号"><strong>临时任务</strong><small>不关联项目期号</small></span><span data-label="任务类型"><strong>{{ task.taskType || (task.phase ? '项目期号任务' : '临时任务') }}</strong></span><span class="task-page-participants" data-label="参与角色"><small>发起：{{ task.createdBy || task.owner }}</small><small>执行：{{ (task.executors || [task.owner]).join('、') }}</small><small>确认：{{ task.confirmer || task.owner }}</small></span><span data-label="优先级"><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag></span><span data-label="状态"><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span data-label="截止时间">{{ task.due }}</span></button><a-empty v-if="!taskPageRows.length" description="暂无符合条件的任务" /></div></section>
     </main>
@@ -1864,7 +1938,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
         <a-input v-model="dailyReportKeyword" class="daily-report-search" allow-clear placeholder="搜索日报名称"><template #prefix><IconSearch /></template></a-input>
         <a-button v-if="dailyReportTab === 'team' && (dailyReportStatus !== '全部状态' || dailyReportDateRange.length || dailyReportUser !== '全部成员' || dailyReportKeyword)" type="text" @click="dailyReportStatus = '全部状态'; dailyReportDateRange = []; dailyReportUser = '全部成员'; dailyReportKeyword = ''">重置筛选</a-button>
       </section>
-      <section class="daily-page-panel"><header><div><h2>{{ dailyReportTab === 'mine' ? '我的日报' : '团队日报' }}</h2><span>共 {{ dailyReportRows.length }} 份 · 可查看、编辑或删除日报</span></div><a-button type="primary" size="small" @click="openDailyReportModal()"><IconPlus />发送日报</a-button></header><div class="daily-report-table"><div class="daily-report-row daily-report-row-heading"><span>日报名称</span><span>日报工时</span><span>发送人</span><span>发送时间</span><span>状态</span><span>操作</span></div><div v-for="report in dailyReportRows" :key="report.id" class="daily-report-row" role="button" tabindex="0" @click="openDailyReport(report)" @keydown.enter="openDailyReport(report)" @keydown.space.prevent="openDailyReport(report)"><span data-label="日报名称"><strong>{{ dailyReportDisplayName(report) }}</strong><small>{{ report.id }}</small></span><span data-label="日报工时"><strong>{{ report.hours }}h</strong><small>日报工时</small></span><span data-label="发送人">{{ report.sender }}</span><span data-label="发送时间">{{ report.sentAt }}</span><span data-label="状态"><a-tag :color="dailyReportStatusColors[report.status]">{{ report.status }}</a-tag></span><span class="daily-report-actions" data-label="操作"><a-tooltip content="查看日报"><a-button type="text" size="small" aria-label="查看日报" @click.stop="openDailyReport(report)"><IconInfoCircle /></a-button></a-tooltip><a-tooltip content="编辑日报"><a-button type="text" size="small" aria-label="编辑日报" @click.stop="openDailyReportModal(report)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除日报"><a-button type="text" size="small" status="danger" aria-label="删除日报" @click.stop="deleteDailyReport(report)"><IconDelete /></a-button></a-tooltip></span></div><a-empty v-if="!dailyReportRows.length" description="暂无符合条件的日报" /></div></section>
+      <section class="daily-page-panel"><header><div><h2>{{ dailyReportTab === 'mine' ? '我的日报' : '团队日报' }}</h2><span>共 {{ dailyReportRows.length }} 份 · 可查看、编辑或删除日报</span></div><a-button v-if="canManageReports" type="primary" size="small" @click="openDailyReportModal()"><IconPlus />发送日报</a-button></header><div class="daily-report-table"><div class="daily-report-row daily-report-row-heading"><span>日报名称</span><span>日报工时</span><span>发送人</span><span>发送时间</span><span>状态</span><span>操作</span></div><div v-for="report in dailyReportRows" :key="report.id" class="daily-report-row" role="button" tabindex="0" @click="openDailyReport(report)" @keydown.enter="openDailyReport(report)" @keydown.space.prevent="openDailyReport(report)"><span data-label="日报名称"><strong>{{ dailyReportDisplayName(report) }}</strong><small>{{ report.id }}</small></span><span data-label="日报工时"><strong>{{ report.hours }}h</strong><small>日报工时</small></span><span data-label="发送人">{{ report.sender }}</span><span data-label="发送时间">{{ report.sentAt }}</span><span data-label="状态"><a-tag :color="dailyReportStatusColors[report.status]">{{ report.status }}</a-tag></span><span class="daily-report-actions" data-label="操作"><a-tooltip content="查看日报"><a-button type="text" size="small" aria-label="查看日报" @click.stop="openDailyReport(report)"><IconInfoCircle /></a-button></a-tooltip><template v-if="canManageReports && (isManagementRole || report.sender === accountProfile.nickname)"><a-tooltip content="编辑日报"><a-button type="text" size="small" aria-label="编辑日报" @click.stop="openDailyReportModal(report)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除日报"><a-button type="text" size="small" status="danger" aria-label="删除日报" @click.stop="deleteDailyReport(report)"><IconDelete /></a-button></a-tooltip></template></span></div><a-empty v-if="!dailyReportRows.length" description="暂无符合条件的日报" /></div></section>
     </main>
     <main v-else-if="activeNav === '工时'" class="work-hours-page">
       <header class="work-hours-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 工时记录</span><h1>工时</h1><p>{{ isManagementRole ? '汇总当前权限范围内的项目期号工时。' : '查看与你相关的项目期号工时记录。' }}</p></div><a-button type="primary" :disabled="!workHoursFilteredLogs.length" @click="exportWorkHours"><IconExport />导出工时</a-button></header>

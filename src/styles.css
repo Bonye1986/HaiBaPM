@@ -1397,3 +1397,76 @@ h1, h2, h3, p { margin: 0; }
   .navigator-body.customer-collapsed .customer-expand-button.arco-btn { width: 48px; height: 46px; }
   .navigator-body .customer-collapsed-label { margin: 0; writing-mode: horizontal-tb; }
 }
+
+/* Narrow screens use labelled detail blocks instead of scaled desktop tables. */
+@media (max-width: 680px) {
+  .app-shell { overflow-x: hidden; }
+  .workbench-panel { overflow: hidden; }
+  .workbench-task-table { min-width: 0; }
+  .workbench-row.workbench-row-heading { display: none; }
+  .workbench-row:not(.workbench-row-heading) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px 14px;
+    min-height: 0;
+    padding: 14px;
+  }
+  .workbench-row:not(.workbench-row-heading) > span { min-width: 0; overflow: visible; white-space: normal; }
+  .workbench-row:not(.workbench-row-heading) > span::before,
+  .work-hours-row:not(.work-hours-row-heading) > span::before,
+  .team-member-row:not(.team-member-row-heading) > span::before {
+    display: block;
+    margin-bottom: 3px;
+    color: #86909c;
+    font-size: 10px;
+  }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(1),
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(2) { grid-column: 1 / -1; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(1)::before { content: "任务名称"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(2)::before { content: "项目期号"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(3)::before { content: "负责人"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(4)::before { content: "状态"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(5)::before { content: "截止时间"; }
+
+  .work-hours-table, .work-hours-detail-table, .team-member-table { min-width: 0; }
+  .work-hours-row.work-hours-row-heading, .team-member-row.team-member-row-heading { display: none; }
+  .work-hours-row:not(.work-hours-row-heading), .team-member-row:not(.team-member-row-heading) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 11px 14px;
+    min-height: 0;
+    padding: 14px;
+  }
+  .work-hours-row:not(.work-hours-row-heading) > span,
+  .team-member-row:not(.team-member-row-heading) > span { min-width: 0; overflow: visible; white-space: normal; }
+  .work-hours-row:not(.work-hours-row-heading) > span:nth-child(1),
+  .work-hours-row:not(.work-hours-row-heading) > span:nth-child(2),
+  .work-hours-row:not(.work-hours-row-heading) > span:nth-child(4) { grid-column: 1 / -1; }
+  .work-hours-row:not(.work-hours-row-heading) > span:nth-child(1)::before { content: "期号"; }
+  .work-hours-row:not(.work-hours-row-heading) > span:nth-child(2)::before { content: "项目 / 期号名称"; }
+  .work-hours-row:not(.work-hours-row-heading) > span:nth-child(3)::before { content: "登记工时"; }
+  .work-hours-row:not(.work-hours-row-heading) > span:nth-child(4)::before { content: "成员工时"; }
+  .work-hours-row:not(.work-hours-row-heading) > span:nth-child(5)::before { content: "最近更新"; }
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(1),
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(5),
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(7) { grid-column: 1 / -1; }
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(1)::before { content: "成员"; }
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(2)::before { content: "成员类型"; }
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(3)::before { content: "职务"; }
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(4)::before { content: "联系方式"; }
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(5)::before { content: "权限"; }
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(6)::before { content: "状态"; }
+  .team-member-row:not(.team-member-row-heading) > span:nth-child(7)::before { content: "操作"; }
+  .team-member-actions { justify-content: flex-start; }
+  .team-member-actions .arco-btn { width: 36px; min-width: 36px; height: 36px; }
+
+  .statistics-panel { overflow: hidden; }
+  .statistics-panel > header, .statistics-status-list, .statistics-report-summary, .statistics-panel-foot, .statistics-risk-list { min-width: 0; }
+  .statistics-bar-row { grid-template-columns: 92px minmax(0, 1fr); gap: 10px; }
+  .statistics-report-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .statistics-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  .navigator-body .project-sidebar { height: 420px; max-height: 420px; }
+  .task-workspace { min-height: 0; }
+  .task-control-bar, .task-tools { scrollbar-width: thin; }
+}
