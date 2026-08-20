@@ -125,7 +125,6 @@ const draggedLaneKey = ref(null);
 const laneModalVisible = ref(false);
 const laneEditingKey = ref(null);
 const laneDraft = ref({ title: "", color: "arcoblue" });
-const selectedTaskKeys = ref([]);
 const selectedTask = ref(null);
 const taskComments = ref({});
 const taskActivities = ref({});
@@ -492,9 +491,16 @@ const createCustomerOptions = computed(() => { projectRevision.value; return pro
 const createProjectOptions = computed(() => { projectRevision.value; return projects.find(customer => customer.key === projectCreateDraft.value.customerKey)?.projects || []; });
 const customerStatusCounts = computed(() => Object.fromEntries(["全部状态", "进行中", "未开始", "已完成", "延期"].map(status => [status, customerScope.value.reduce((total, customer) => total + customer.projects.reduce((sum, project) => sum + project.phases.filter(phase => status === "全部状态" || phase.status === status).length, 0), 0)])));
 const selectedProjectPublicDocument = computed(() => projectPublicInfo.value[selectedProject.value?.key]?.document || "");
-const rowSelection = computed(() => ({ selectedRowKeys: selectedTaskKeys.value, onChange: keys => { selectedTaskKeys.value = keys; } }));
+function taskChecklistAction(task) {
+  const currentUser = accountProfile.value.nickname;
+  const executors = task.executors?.length ? task.executors : [task.owner];
+  if (task.status === "未完成" && executors.includes(currentUser)) return "submit";
+  if (task.status === "待确认" && task.confirmer === currentUser) return "confirm";
+  return "";
+}
 const profileInitial = computed(() => accountProfile.value.nickname.trim().slice(0, 1) || "用");
 const columns = [
+  { title: "完成", slotName: "checklist", width: 52, align: "center" },
   { title: "任务名称", dataIndex: "title", slotName: "title", width: 194 },
   { title: "优先级", dataIndex: "priority", slotName: "priority", width: 78 },
   { title: "负责人", dataIndex: "owner", slotName: "owner", width: 96 },
@@ -504,7 +510,6 @@ const columns = [
 ];
 
 watch(selectedPhaseKey, key => {
-  selectedTaskKeys.value = [];
   recentPhaseKeys.value = [key, ...recentPhaseKeys.value.filter(item => item !== key)].slice(0, 2);
 });
 watch([normalizedKeyword, filteredProjects], () => {
@@ -1050,9 +1055,7 @@ function addSubtask() {
 }
 function removeSubtask(subtask) { draft.value.subtasks = (draft.value.subtasks || []).filter(item => item.id !== subtask.id); }
 function exportTasks() {
-  const selected = selectedTaskKeys.value.length
-    ? visibleTasks.value.filter(task => selectedTaskKeys.value.includes(task.id))
-    : visibleTasks.value;
+  const selected = visibleTasks.value;
   if (!selected.length) {
     Message.warning("当前没有可导出的任务");
     return;
@@ -1070,6 +1073,14 @@ function exportTasks() {
   link.click();
   URL.revokeObjectURL(url);
   Message.success(`已导出 ${selected.length} 个任务`);
+}
+function handleTaskChecklistChange(task) {
+  const action = taskChecklistAction(task);
+  if (action === "submit") {
+    updateTaskStatus(task.id, "待确认", "任务结果已提交，等待确认");
+    return;
+  }
+  if (action === "confirm") updateTaskStatus(task.id, "已完成", "确认通过，任务已完成");
 }
 function orderedBoardTasks(lane) {
   const order = new Map(boardOrder.value.map((id, index) => [id, index]));
@@ -1816,7 +1827,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <main class="task-workspace">
         <section class="phase-header"><div class="phase-identity"><div class="phase-copy"><div class="phase-title-row"><h2>{{ selectedPhase.name }}</h2><a-tag :color="phaseStatusColor(selectedPhase.status)">{{ selectedPhase.status }}</a-tag></div><p>{{ selectedPhase.code }} · {{ selectedPhase.projectName }}</p><div class="phase-meta"><span><IconCalendar />{{ selectedPhase.dates }}</span><span><IconUserGroup />负责人：{{ selectedPhase.owner }}</span></div></div></div><a-tooltip content="期号设置"><a-button class="phase-settings-button" aria-label="期号设置" @click="openPhaseSettings"><IconSettings /></a-button></a-tooltip></section>
         <section class="task-control-bar"><a-radio-group class="task-view-switch" type="button" size="small" v-model="taskView"><a-radio value="list"><IconList />任务列表</a-radio><a-radio value="board"><IconApps />看板视图</a-radio></a-radio-group><div class="task-tools"><a-input v-model="taskKeyword" allow-clear placeholder="搜索任务名称"><template #prefix><IconSearch /></template></a-input><a-select v-model="statusFilter" :style="{ width: '118px' }"><a-option v-for="status in statusOptions" :key="status" :value="status">{{ status }}</a-option></a-select><a-date-picker v-model="dueDateFilter" class="task-due-filter" format="YYYY-MM-DD" value-format="YYYY-MM-DD" placeholder="截止时间" allow-clear /><a-button type="primary" @click="taskView === 'list' ? openTaskModal() : openLaneModal()"><IconPlus />{{ taskView === 'list' ? '新建任务' : '添加列' }}</a-button><a-dropdown trigger="click"><a-button class="workspace-more-button"><IconMore />更多</a-button><template #content><a-menu class="workspace-more-menu" @menu-item-click="openWorkspaceMore"><a-menu-item key="import"><IconImport />导入任务</a-menu-item><a-menu-item key="template"><IconFile />下载导入模板</a-menu-item><a-menu-item key="export"><IconExport />{{ taskView === 'list' ? '导出任务' : '导出看板' }}</a-menu-item></a-menu></template></a-dropdown></div><input ref="taskImportInput" class="task-import-input" type="file" accept=".csv,text/csv" @change="importTasks" /></section>
-        <section v-if="taskView === 'list'" class="task-list-section"><div class="table-frame"><a-table row-key="id" :columns="columns" :data="visibleTasks" :pagination="{ pageSize: 8, sizeCanChange: false }" :row-selection="rowSelection" @row-click="onTaskRowClick"><template #title="{ record }"><div class="task-title-cell"><strong>{{ record.title }}</strong><small>{{ record.id }} · {{ record.module }}</small></div></template><template #priority="{ record }"><a-tag :color="priorityColors[record.priority]">{{ record.priority }}</a-tag></template><template #owner="{ record }"><span class="owner-cell"><a-avatar :size="26">{{ record.owner.slice(0, 1) }}</a-avatar>{{ record.owner }}</span></template><template #status="{ record }"><a-tag :color="phaseStatusColor(record.status)">{{ record.status }}</a-tag></template><template #actions="{ record }"><a-button type="text" size="small" @click.stop="onTaskRowClick(record)"><IconMore /></a-button></template></a-table></div></section>
+        <section v-if="taskView === 'list'" class="task-list-section"><div class="table-frame"><a-table row-key="id" :columns="columns" :data="visibleTasks" :pagination="{ pageSize: 8, sizeCanChange: false }" @row-click="onTaskRowClick"><template #checklist="{ record }"><a-checkbox :model-value="record.status === '已完成'" :indeterminate="record.status === '待确认'" :disabled="!taskChecklistAction(record)" :aria-label="`${record.title}完成状态`" @click.stop @change="handleTaskChecklistChange(record)" /></template><template #title="{ record }"><div class="task-title-cell"><strong>{{ record.title }}</strong><small>{{ record.id }} · {{ record.module }}</small></div></template><template #priority="{ record }"><a-tag :color="priorityColors[record.priority]">{{ record.priority }}</a-tag></template><template #owner="{ record }"><span class="owner-cell"><a-avatar :size="26">{{ record.owner.slice(0, 1) }}</a-avatar>{{ record.owner }}</span></template><template #status="{ record }"><a-tag :color="phaseStatusColor(record.status)">{{ record.status }}</a-tag></template><template #actions="{ record }"><a-button type="text" size="small" @click.stop="onTaskRowClick(record)"><IconMore /></a-button></template></a-table></div></section>
         <section v-else class="task-board-wrapper"><div class="task-board-section"><div v-for="lane in boardLanes" :key="lane.key" class="task-board-lane"><header draggable="true" @dragstart="startLaneDrag(lane, $event)" @dragover.prevent @drop="dropLane(lane, $event)"><span class="task-board-lane-title"><a-tag :color="lane.color">{{ lane.title }}</a-tag><b>{{ orderedBoardTasks(lane).length }}</b></span><span class="task-board-lane-actions"><a-tooltip content="编辑列"><a-button type="text" size="mini" @click.stop="openLaneModal(lane)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除列"><a-button type="text" size="mini" @click.stop="deleteLane(lane)"><IconDelete /></a-button></a-tooltip></span></header><div class="task-board-cards" @dragover.prevent @drop="dropTaskOnLane(lane, $event)"><button v-for="task in orderedBoardTasks(lane)" :key="task.id" class="task-board-card" draggable="true" @dragstart.stop="startTaskDrag(task, $event)" @dragover.prevent @drop="dropTaskBefore(task, lane, $event)" @click="onTaskRowClick(task)"><div class="task-board-card-top"><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag><span>{{ task.due }}</span></div><strong>{{ task.title }}</strong><small>{{ task.id }}</small><footer><span><a-avatar :size="22">{{ task.owner.slice(0, 1) }}</a-avatar>{{ task.owner }}</span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></footer></button><a-empty v-if="!orderedBoardTasks(lane).length" description="暂无任务" /></div></div></div></section>
       </main>
     </div>
