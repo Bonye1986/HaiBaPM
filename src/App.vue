@@ -129,6 +129,8 @@ const selectedTask = ref(null);
 const taskComments = ref({});
 const taskActivities = ref({});
 const commentDraft = ref("");
+const commentEditingId = ref(null);
+const commentEditDraft = ref("");
 const replyingTo = ref(null);
 const subtaskDraft = ref("");
 const subtaskAssigneeDraft = ref("李项目");
@@ -1519,6 +1521,8 @@ function removeTaskDrawerSubtask(subtask) {
 function onTaskRowClick(record) {
   selectedTask.value = record;
   commentDraft.value = "";
+  commentEditingId.value = null;
+  commentEditDraft.value = "";
   replyingTo.value = null;
   cancelTaskDrawerSubtask();
   cancelSubtaskEdit();
@@ -1530,15 +1534,64 @@ function onTaskRowClick(record) {
 }
 function commentText(html) { return String(html || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").trim(); }
 function replyToComment(comment) {
+  commentEditingId.value = null;
+  commentEditDraft.value = "";
   replyingTo.value = comment;
   commentDraft.value = `<p>@${comment.author} </p>`;
+}
+function editTaskComment(comment) {
+  if (comment.author !== accountProfile.value.nickname) { Message.warning("只能编辑自己发布的评论"); return; }
+  replyingTo.value = null;
+  commentDraft.value = "";
+  commentEditingId.value = comment.id;
+  commentEditDraft.value = comment.content;
+}
+function cancelTaskCommentEdit() {
+  commentEditingId.value = null;
+  commentEditDraft.value = "";
+}
+function saveTaskCommentEdit(comment) {
+  if (!selectedTask.value || comment.author !== accountProfile.value.nickname) return;
+  if (!commentText(commentEditDraft.value)) { Message.warning("评论内容不能为空"); return; }
+  const taskId = selectedTask.value.id;
+  taskComments.value = {
+    ...taskComments.value,
+    [taskId]: (taskComments.value[taskId] || []).map(item => item.id === comment.id ? { ...item, content: commentEditDraft.value, edited: true, editedAt: "刚刚" } : item),
+  };
+  appendTaskActivity(taskId, "编辑评论", "更新了评论内容");
+  cancelTaskCommentEdit();
+  Message.success("评论已更新");
+}
+function deleteTaskComment(comment) {
+  if (!selectedTask.value || comment.author !== accountProfile.value.nickname) { Message.warning("只能删除自己发布的评论"); return; }
+  Modal.confirm({
+    title: "删除评论",
+    content: "删除后评论内容和其回复将无法恢复，确定删除吗？",
+    okText: "删除",
+    cancelText: "取消",
+    onOk: () => {
+      const taskId = selectedTask.value?.id;
+      if (!taskId) return;
+      const comments = taskComments.value[taskId] || [];
+      const removedIds = new Set([comment.id]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        comments.forEach(item => { if (item.parentId && removedIds.has(item.parentId) && !removedIds.has(item.id)) { removedIds.add(item.id); changed = true; } });
+      }
+      taskComments.value = { ...taskComments.value, [taskId]: comments.filter(item => !removedIds.has(item.id)) };
+      if (commentEditingId.value === comment.id) cancelTaskCommentEdit();
+      appendTaskActivity(taskId, "删除评论", "移除了评论及其回复");
+      Message.success("评论已删除");
+    },
+  });
 }
 function addTaskComment() {
   if (!selectedTask.value || !commentText(commentDraft.value)) { Message.warning("请输入评论内容"); return; }
   const taskId = selectedTask.value.id;
   const comment = {
     id: `comment-${Date.now()}`,
-    author: "李项目",
+    author: accountProfile.value.nickname,
     createdAt: "刚刚",
     content: commentDraft.value,
     parentId: replyingTo.value?.id || null,
@@ -2122,7 +2175,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
         <section class="drawer-section task-collaboration-section">
           <div class="task-collaboration-tabs"><button :class="{ active: taskCollaborationTab === 'comments' }" @click="taskCollaborationTab = 'comments'">评论与回复 <b>{{ selectedTaskComments.length }}</b></button><button :class="{ active: taskCollaborationTab === 'activities' }" @click="taskCollaborationTab = 'activities'">操作记录 <b>{{ selectedTaskActivities.length }}</b></button></div>
           <div v-if="taskCollaborationTab === 'comments'">
-            <div v-if="selectedTaskComments.length" class="task-comment-list"><article v-for="comment in selectedTaskComments" :key="comment.id" class="task-comment-item" :class="{ 'task-comment-reply': comment.parentId }"><div class="task-comment-heading"><span><a-avatar :size="24">{{ comment.author.slice(0, 1) }}</a-avatar><b>{{ comment.author }}</b></span><small>{{ comment.createdAt }}</small></div><div class="rich-text-display" v-html="comment.content" /><a-button type="text" size="small" @click="replyToComment(comment)">回复</a-button></article></div>
+            <div v-if="selectedTaskComments.length" class="task-comment-list"><article v-for="comment in selectedTaskComments" :key="comment.id" class="task-comment-item" :class="{ 'task-comment-reply': comment.parentId }"><div class="task-comment-heading"><span><a-avatar :size="24">{{ comment.author.slice(0, 1) }}</a-avatar><b>{{ comment.author }}</b><small v-if="comment.edited">已编辑</small></span><span class="task-comment-meta"><small>{{ comment.editedAt || comment.createdAt }}</small><template v-if="comment.author === accountProfile.nickname"><a-tooltip content="编辑评论"><a-button type="text" size="small" aria-label="编辑评论" @click="editTaskComment(comment)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除评论"><a-button type="text" size="small" status="danger" aria-label="删除评论" @click="deleteTaskComment(comment)"><IconDelete /></a-button></a-tooltip></template></span></div><template v-if="commentEditingId === comment.id"><RichTextEditor v-model="commentEditDraft" class="task-comment-inline-editor" placeholder="编辑评论内容" /><div class="task-comment-edit-actions"><a-button type="text" size="small" @click="cancelTaskCommentEdit">取消</a-button><a-button type="primary" size="small" @click="saveTaskCommentEdit(comment)">保存</a-button></div></template><template v-else><div class="rich-text-display" v-html="comment.content" /><a-button type="text" size="small" @click="replyToComment(comment)">回复</a-button></template></article></div>
             <a-empty v-else description="暂无评论" />
             <div class="task-comment-editor"><span v-if="replyingTo" class="replying-hint">回复 {{ replyingTo.author }}<a-button type="text" size="small" @click="replyingTo = null; commentDraft = ''">取消</a-button></span><RichTextEditor v-model="commentDraft" placeholder="写下评论或回复" /></div>
           </div>
