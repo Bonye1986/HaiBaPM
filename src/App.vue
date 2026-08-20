@@ -77,6 +77,10 @@ const dailyReportDateRange = ref([]);
 const dailyReportUser = ref("全部成员");
 const dailyReportKeyword = ref("");
 const selectedDailyReport = ref(null);
+const dailyReports = ref(dailyReportSeed.map(report => ({ ...report })));
+const dailyReportModalVisible = ref(false);
+const dailyReportEditingId = ref(null);
+const dailyReportDraft = ref({ name: "", date: "", hours: 0, phase: "", summary: "", nextPlan: "", blockers: "", status: "草稿" });
 const workHoursDateRange = ref([]);
 const workHoursMember = ref("全部成员");
 const workHoursKeyword = ref("");
@@ -300,7 +304,7 @@ const statsOverview = computed(() => {
   const phases = statsFilteredPhases.value;
   const taskRows = statsFilteredTasks.value;
   const logs = phases.flatMap(phase => phaseWorklogs.value[phase.key] || []);
-  const reports = dailyReportSeed.filter(report => phases.some(phase => phase.key === report.phase));
+  const reports = dailyReports.value.filter(report => phases.some(phase => phase.key === report.phase));
   const completedPhases = phases.filter(phase => phase.status === "已完成").length;
   const delayedPhases = phases.filter(phase => phase.status === "延期").length;
   const overdueTasks = taskRows.filter(task => task.status !== "已完成" && task.due < dashboardDate.value).length;
@@ -362,7 +366,7 @@ const statsRiskTasks = computed(() => {
   const phaseMap = new Map(statsFilteredPhases.value.map(phase => [phase.key, phase]));
   return statsFilteredTasks.value.filter(task => task.status !== "已完成" && task.due < dashboardDate.value).sort((a, b) => ({ P0: 0, P1: 1, P2: 2 }[a.priority] ?? 3) - ({ P0: 0, P1: 1, P2: 2 }[b.priority] ?? 3) || a.due.localeCompare(b.due)).map(task => ({ ...task, phase: phaseMap.get(task.phase) || phaseByKey(task.phase) }));
 });
-const statsReportSummary = computed(() => ["已发送", "待确认", "已退回", "草稿"].map(status => ({ status, count: dailyReportSeed.filter(report => statsFilteredPhases.value.some(phase => phase.key === report.phase) && report.status === status).length })));
+const statsReportSummary = computed(() => ["已发送", "待确认", "已退回", "草稿"].map(status => ({ status, count: dailyReports.value.filter(report => statsFilteredPhases.value.some(phase => phase.key === report.phase) && report.status === status).length })));
 const taskPageRows = computed(() => {
   const keyword = taskPageKeyword.value.trim();
   const currentUser = accountProfile.value.nickname;
@@ -384,13 +388,13 @@ const dailyReportRows = computed(() => {
   const [startDate, endDate] = dailyReportDateRange.value || [];
   const currentUser = accountProfile.value.nickname;
   const visiblePhaseKeys = new Set(dashboardPhaseRows.value.map(phase => phase.key));
-  return dailyReportSeed.filter(report => {
+  return dailyReports.value.filter(report => {
     const related = isManagementRole.value || report.sender === currentUser || visiblePhaseKeys.has(report.phase);
     const tabMatch = dailyReportTab.value === "mine" ? report.sender === currentUser : related;
     const statusMatch = dailyReportTab.value === "mine" || dailyReportStatus.value === "全部状态" || report.status === dailyReportStatus.value;
     const dateMatch = dailyReportTab.value === "mine" || ((!startDate || report.date >= startDate) && (!endDate || report.date <= endDate));
     const userMatch = dailyReportTab.value === "mine" || dailyReportUser.value === "全部成员" || report.sender === dailyReportUser.value;
-    const keywordMatch = !keyword || `${report.name}${report.sender}${phaseByKey(report.phase)?.code || ""}${phaseByKey(report.phase)?.name || ""}`.includes(keyword);
+    const keywordMatch = !keyword || `${dailyReportDisplayName(report)}${report.sender}${phaseByKey(report.phase)?.code || ""}${phaseByKey(report.phase)?.name || ""}`.includes(keyword);
     return tabMatch && statusMatch && dateMatch && userMatch && keywordMatch;
 }).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
 });
@@ -1456,7 +1460,38 @@ function savePhaseBasicInfo() {
 }
 function confirmPhaseSettings() { if (savePhaseBasicInfo()) phaseDrawerVisible.value = false; }
 function openWorklogDetail(log) { selectedWorklog.value = { ...log, phase: log.phase || phaseByKey(log.phaseKey || selectedPhaseKey.value) }; }
+const selectedDailyReportTasks = computed(() => selectedDailyReport.value ? tasks.value.filter(task => task.phase === selectedDailyReport.value.phase) : []);
+function dailyReportDisplayName(report) { return `${report.sender}的日报 ${report.date}`; }
 function openDailyReport(report) { selectedDailyReport.value = report; }
+function openDailyReportModal(report = null) {
+  dailyReportEditingId.value = report?.id || null;
+  const currentDate = report?.date || new Date().toISOString().slice(0, 10);
+  dailyReportDraft.value = report ? { ...report } : { name: `${accountProfile.value.nickname}的日报 ${currentDate}`, sender: accountProfile.value.nickname, date: currentDate, hours: 0, phase: dashboardPhaseRows.value[0]?.key || "", summary: "", nextPlan: "", blockers: "", status: "草稿" };
+  dailyReportModalVisible.value = true;
+}
+function syncDailyReportName() {
+  dailyReportDraft.value.name = `${dailyReportDraft.value.sender || accountProfile.value.nickname}的日报 ${dailyReportDraft.value.date || new Date().toISOString().slice(0, 10)}`;
+}
+function saveDailyReport() {
+  const draft = dailyReportDraft.value;
+  if (!draft.date || !draft.phase || !String(draft.summary || "").trim()) { Message.warning("请填写日期、关联期号和今日完成内容"); return; }
+  const sender = draft.sender || accountProfile.value.nickname;
+  const report = { ...draft, name: `${sender}的日报 ${draft.date}`, sender, sentAt: `${draft.date} 18:00`, hours: Number(draft.hours || 0) };
+  if (dailyReportEditingId.value) {
+    const index = dailyReports.value.findIndex(item => item.id === dailyReportEditingId.value);
+    if (index >= 0) dailyReports.value[index] = report;
+    if (selectedDailyReport.value?.id === report.id) selectedDailyReport.value = report;
+    Message.success("日报已更新");
+  } else {
+    report.id = `DR-${report.date.replaceAll("-", "").slice(2)}-${String(dailyReports.value.length + 1).padStart(2, "0")}`;
+    dailyReports.value.unshift(report);
+    Message.success("日报已保存");
+  }
+  dailyReportModalVisible.value = false;
+}
+function deleteDailyReport(report) {
+  Modal.confirm({ title: "删除日报", content: `确定删除“${dailyReportDisplayName(report)}”吗？`, okText: "删除", cancelText: "取消", onOk: () => { dailyReports.value = dailyReports.value.filter(item => item.id !== report.id); if (selectedDailyReport.value?.id === report.id) selectedDailyReport.value = null; Message.success("日报已删除"); } });
+}
 function handleWorklogClick(event) {
   const row = event.target.closest?.(".worklog-row:not(.worklog-row-heading)");
   if (!row) return;
@@ -1716,14 +1751,14 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <header class="daily-page-heading">
         <div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 工作记录</span><h1>日报</h1><p>{{ dailyReportTab === 'mine' ? '查看和回顾自己提交的日报。' : '查看当前权限范围内的团队日报。' }}</p></div>
       </header>
-      <section class="daily-tabs" role="tablist"><div class="daily-tab-buttons"><button :class="{ active: dailyReportTab === 'mine' }" role="tab" :aria-selected="dailyReportTab === 'mine'" @click="dailyReportTab = 'mine'">我的日报 <b>{{ dailyReportSeed.filter(report => report.sender === accountProfile.nickname).length }}</b></button><button :class="{ active: dailyReportTab === 'team' }" role="tab" :aria-selected="dailyReportTab === 'team'" @click="dailyReportTab = 'team'">团队日报 <b>{{ dailyReportRows.length }}</b></button></div>
+      <section class="daily-tabs" role="tablist"><div class="daily-tab-buttons"><button :class="{ active: dailyReportTab === 'mine' }" role="tab" :aria-selected="dailyReportTab === 'mine'" @click="dailyReportTab = 'mine'">我的日报 <b>{{ dailyReports.filter(report => report.sender === accountProfile.nickname).length }}</b></button><button :class="{ active: dailyReportTab === 'team' }" role="tab" :aria-selected="dailyReportTab === 'team'" @click="dailyReportTab = 'team'">团队日报 <b>{{ dailyReportRows.length }}</b></button></div>
         <a-select v-if="dailyReportTab === 'team'" v-model="dailyReportStatus" class="daily-status-filter"><a-option value="全部状态">全部状态</a-option><a-option v-for="status in ['已发送', '待确认', '已退回', '草稿']" :key="status" :value="status">{{ status }}</a-option></a-select>
         <a-range-picker v-if="dailyReportTab === 'team'" v-model="dailyReportDateRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['发送开始日期', '发送结束日期']" allow-clear />
         <a-select v-if="dailyReportTab === 'team'" v-model="dailyReportUser" allow-search class="daily-user-filter"><a-option value="全部成员">全部成员</a-option><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select>
         <a-input v-model="dailyReportKeyword" class="daily-report-search" allow-clear placeholder="搜索日报名称"><template #prefix><IconSearch /></template></a-input>
         <a-button v-if="dailyReportTab === 'team' && (dailyReportStatus !== '全部状态' || dailyReportDateRange.length || dailyReportUser !== '全部成员' || dailyReportKeyword)" type="text" @click="dailyReportStatus = '全部状态'; dailyReportDateRange = []; dailyReportUser = '全部成员'; dailyReportKeyword = ''">重置筛选</a-button>
       </section>
-      <section class="daily-page-panel"><header><div><h2>{{ dailyReportTab === 'mine' ? '我的日报' : '团队日报' }}</h2><span>共 {{ dailyReportRows.length }} 份 · 点击日报查看完整内容</span></div></header><div class="daily-report-table"><div class="daily-report-row daily-report-row-heading"><span>日报名称</span><span>发送人</span><span>发送时间</span><span>关联期号</span><span>状态</span></div><button v-for="report in dailyReportRows" :key="report.id" class="daily-report-row" @click="openDailyReport(report)"><span><strong>{{ report.name }}</strong><small>{{ report.id }} · {{ report.hours }}h</small></span><span>{{ report.sender }}</span><span>{{ report.sentAt }}</span><span><strong>{{ phaseByKey(report.phase)?.code }}</strong><small>{{ phaseByKey(report.phase)?.name }}</small></span><span><a-tag :color="dailyReportStatusColors[report.status]">{{ report.status }}</a-tag></span></button><a-empty v-if="!dailyReportRows.length" description="暂无符合条件的日报" /></div></section>
+      <section class="daily-page-panel"><header><div><h2>{{ dailyReportTab === 'mine' ? '我的日报' : '团队日报' }}</h2><span>共 {{ dailyReportRows.length }} 份 · 可查看、编辑或删除日报</span></div><a-button type="primary" size="small" @click="openDailyReportModal()"><IconPlus />发送日报</a-button></header><div class="daily-report-table"><div class="daily-report-row daily-report-row-heading"><span>日报名称</span><span>日报工时</span><span>发送人</span><span>发送时间</span><span>状态</span><span>操作</span></div><div v-for="report in dailyReportRows" :key="report.id" class="daily-report-row" role="button" tabindex="0" @click="openDailyReport(report)" @keydown.enter="openDailyReport(report)"><span><strong>{{ dailyReportDisplayName(report) }}</strong><small>{{ report.id }}</small></span><span><strong>{{ report.hours }}h</strong><small>日报工时</small></span><span>{{ report.sender }}</span><span>{{ report.sentAt }}</span><span><a-tag :color="dailyReportStatusColors[report.status]">{{ report.status }}</a-tag></span><span class="daily-report-actions"><a-tooltip content="查看日报"><a-button type="text" size="small" aria-label="查看日报" @click.stop="openDailyReport(report)"><IconInfoCircle /></a-button></a-tooltip><a-tooltip content="编辑日报"><a-button type="text" size="small" aria-label="编辑日报" @click.stop="openDailyReportModal(report)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除日报"><a-button type="text" size="small" status="danger" aria-label="删除日报" @click.stop="deleteDailyReport(report)"><IconDelete /></a-button></a-tooltip></span></div><a-empty v-if="!dailyReportRows.length" description="暂无符合条件的日报" /></div></section>
     </main>
     <main v-else-if="activeNav === '工时'" class="work-hours-page">
       <header class="work-hours-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 工时记录</span><h1>工时</h1><p>{{ isManagementRole ? '汇总当前权限范围内的项目期号工时。' : '查看与你相关的项目期号工时记录。' }}</p></div><a-button type="primary" :disabled="!workHoursFilteredLogs.length" @click="exportWorkHours"><IconExport />导出工时</a-button></header>
@@ -1918,6 +1953,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
     <a-modal v-model:visible="projectInfoModalVisible" title="编辑项目公共资料" ok-text="保存" cancel-text="取消" @ok="saveProjectInfo"><a-form layout="vertical"><a-form-item label="资料内容"><RichTextEditor v-model="projectInfoDraft" placeholder="补充客户资料、服务器信息、代码仓库、部署地址等项目公共信息" /></a-form-item></a-form></a-modal>
     <a-drawer v-model:visible="helpVisible" width="440px" title="项目模块帮助"><a-input placeholder="搜索帮助内容"><template #prefix><IconSearch /></template></a-input><div class="help-list"><details><summary>如何创建新任务？</summary><p>选择左侧期号后，在任务搜索筛选栏点击新建任务。</p></details><details><summary>项目树的层级是什么？</summary><p>项目树按客户、项目、期号三级展示，任务归属于具体期号。</p></details><details><summary>如何查看延期任务？</summary><p>使用任务搜索筛选栏中的状态筛选，选择延期。</p></details></div></a-drawer>
     <a-modal :visible="Boolean(selectedWorklog)" title="日报详情" :footer="false" @cancel="selectedWorklog = null"><template v-if="selectedWorklog"><div class="worklog-detail"><div class="worklog-detail-meta"><span>日期<b>{{ selectedWorklog.date }}</b></span><span>成员<b>{{ selectedWorklog.member }}</b></span><span>工时<b>{{ selectedWorklog.hours }}h</b></span><span>期号<b>{{ selectedWorklog.phase?.code || selectedPhase.code }} · {{ selectedWorklog.phase?.name || selectedPhase.name }}</b></span></div><section><header><strong>工作内容</strong><small>日报记录</small></header><p>{{ selectedWorklog.content }}</p></section></div></template></a-modal>
-    <a-modal :visible="Boolean(selectedDailyReport)" title="日报详情" :footer="false" @cancel="selectedDailyReport = null"><template v-if="selectedDailyReport"><div class="daily-report-detail"><header><div><h2>{{ selectedDailyReport.name }}</h2><p>{{ selectedDailyReport.id }}</p></div><a-tag :color="dailyReportStatusColors[selectedDailyReport.status]">{{ selectedDailyReport.status }}</a-tag></header><div class="daily-report-detail-meta"><span>发送人<b>{{ selectedDailyReport.sender }}</b></span><span>发送时间<b>{{ selectedDailyReport.sentAt }}</b></span><span>关联期号<b>{{ phaseByKey(selectedDailyReport.phase)?.code }} · {{ phaseByKey(selectedDailyReport.phase)?.name }}</b></span><span>登记工时<b>{{ selectedDailyReport.hours }}h</b></span></div><section><header><strong>今日完成</strong><small>{{ selectedDailyReport.date }}</small></header><p>{{ selectedDailyReport.summary }}</p></section><section><header><strong>明日计划</strong></header><p>{{ selectedDailyReport.nextPlan }}</p></section><section><header><strong>风险与阻塞</strong></header><p>{{ selectedDailyReport.blockers }}</p></section></div></template></a-modal>
+    <a-modal v-model:visible="dailyReportModalVisible" :title="dailyReportEditingId ? '编辑日报' : '发送日报'" :ok-text="dailyReportDraft.status === '草稿' ? '保存草稿' : '发送日报'" cancel-text="取消" @ok="saveDailyReport"><a-form layout="vertical"><div class="form-grid"><a-form-item label="日报日期" required><a-date-picker v-model="dailyReportDraft.date" value-format="YYYY-MM-DD" format="YYYY-MM-DD" @change="syncDailyReportName" /></a-form-item><a-form-item label="日报工时" required><a-input-number v-model="dailyReportDraft.hours" :min="0" :max="24" :precision="1" placeholder="填写工时" /></a-form-item></div><a-form-item label="关联期号" required><a-select v-model="dailyReportDraft.phase" allow-search placeholder="选择关联期号"><a-option v-for="phase in dashboardPhaseRows" :key="phase.key" :value="phase.key">{{ phase.code }} · {{ phase.name }}</a-option></a-select></a-form-item><a-form-item label="日报状态"><a-select v-model="dailyReportDraft.status"><a-option v-for="status in ['草稿', '已发送']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="今日完成" required><a-textarea v-model="dailyReportDraft.summary" :max-length="500" show-word-limit placeholder="填写今日完成的工作内容" /></a-form-item><a-form-item label="明日计划"><a-textarea v-model="dailyReportDraft.nextPlan" :max-length="500" show-word-limit placeholder="填写明日计划" /></a-form-item><a-form-item label="风险与阻塞"><a-textarea v-model="dailyReportDraft.blockers" :max-length="500" show-word-limit placeholder="填写风险、阻塞或协助事项" /></a-form-item></a-form></a-modal>
+    <a-modal :visible="Boolean(selectedDailyReport)" title="日报详情" :footer="false" @cancel="selectedDailyReport = null"><template v-if="selectedDailyReport"><div class="daily-report-detail"><header><div><h2>{{ dailyReportDisplayName(selectedDailyReport) }}</h2><p>{{ selectedDailyReport.id }}</p></div><a-tag :color="dailyReportStatusColors[selectedDailyReport.status]">{{ selectedDailyReport.status }}</a-tag></header><div class="daily-report-detail-meta"><span>发送人<b>{{ selectedDailyReport.sender }}</b></span><span>发送时间<b>{{ selectedDailyReport.sentAt }}</b></span><span>日报工时<b>{{ selectedDailyReport.hours }}h</b></span><span>关联期号<b>{{ phaseByKey(selectedDailyReport.phase)?.code }} · {{ phaseByKey(selectedDailyReport.phase)?.name }}</b></span></div><section><header><strong>今日完成</strong><small>{{ selectedDailyReport.date }}</small></header><p>{{ selectedDailyReport.summary }}</p></section><section><header><strong>明日计划</strong></header><p>{{ selectedDailyReport.nextPlan || '暂无计划' }}</p></section><section><header><strong>风险与阻塞</strong></header><p>{{ selectedDailyReport.blockers || '暂无' }}</p></section><section class="daily-report-task-section"><header><strong>关联任务</strong><small>当前关联期号的任务</small></header><div v-if="selectedDailyReportTasks.length" class="daily-report-task-list"><button v-for="task in selectedDailyReportTasks" :key="task.id" @click="selectedDailyReport = null; onTaskRowClick(task)"><span><b>{{ task.title }}</b><small>{{ task.id }} · {{ task.owner }}</small></span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></button></div><a-empty v-else description="关联期号暂无任务" /></section></div></template></a-modal>
   </div>
 </template>
