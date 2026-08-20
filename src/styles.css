@@ -149,13 +149,15 @@ h1, h2, h3, p { margin: 0; }
 .workbench-todo-due small { margin-top: 4px; color: #86909c; font-size: 10px; }
 .workbench-todo-due.overdue strong { color: #f53f3f; }
 .workbench-task-table { min-width: 720px; }
-.workbench-row { width: 100%; min-height: 58px; display: grid; grid-template-columns: minmax(180px, 2fr) minmax(180px, 1.7fr) minmax(86px, .8fr) 82px 110px; align-items: center; gap: 14px; border: 0; border-bottom: 1px solid #f2f3f5; background: #fff; padding: 8px 16px; color: #4e5969; text-align: left; font-size: 12px; }
+.workbench-row { width: 100%; min-height: 58px; display: grid; grid-template-columns: 46px minmax(170px, 2fr) minmax(180px, 1.7fr) minmax(86px, .8fr) 82px 110px; align-items: center; gap: 14px; border: 0; border-bottom: 1px solid #f2f3f5; background: #fff; padding: 8px 16px; color: #4e5969; text-align: left; font-size: 12px; }
 .workbench-row:not(.workbench-row-heading):hover { background: #f7fbff; cursor: pointer; }
 .workbench-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workbench-row strong, .workbench-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workbench-row strong { color: #1d2129; font-weight: 600; }
 .workbench-row small { margin-top: 3px; color: #86909c; font-size: 10px; }
 .workbench-row .arco-tag { margin: 0; }
+.workbench-row-check { display: flex; align-items: center; justify-content: center; overflow: visible !important; }
+.workbench-row-check .arco-checkbox, .workbench-todo-marker .arco-checkbox { margin: 0; }
 .workbench-row-heading { min-height: 40px; background: #f7f8fa; color: #4e5969; font-size: 11px; font-weight: 500; }
 .workbench-phase-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px; }
 .workbench-phase-grid > button { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #e8ecf2; border-radius: 5px; background: #fff; padding: 12px; color: #4e5969; text-align: left; }
@@ -1420,13 +1422,15 @@ h1, h2, h3, p { margin: 0; }
     color: #86909c;
     font-size: 10px;
   }
-  .workbench-row:not(.workbench-row-heading) > span:nth-child(1),
-  .workbench-row:not(.workbench-row-heading) > span:nth-child(2) { grid-column: 1 / -1; }
-  .workbench-row:not(.workbench-row-heading) > span:nth-child(1)::before { content: "任务名称"; }
-  .workbench-row:not(.workbench-row-heading) > span:nth-child(2)::before { content: "项目期号"; }
-  .workbench-row:not(.workbench-row-heading) > span:nth-child(3)::before { content: "负责人"; }
-  .workbench-row:not(.workbench-row-heading) > span:nth-child(4)::before { content: "状态"; }
-  .workbench-row:not(.workbench-row-heading) > span:nth-child(5)::before { content: "截止时间"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(2),
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(3) { grid-column: 1 / -1; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(1)::before { content: "处理"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(2)::before { content: "任务名称"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(3)::before { content: "项目期号"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(4)::before { content: "负责人"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(5)::before { content: "状态"; }
+  .workbench-row:not(.workbench-row-heading) > span:nth-child(6)::before { content: "截止时间"; }
+  .workbench-row-check::before { display: block; margin-bottom: 3px; color: #86909c; font-size: 10px; content: "处理"; }
 
   .work-hours-table, .work-hours-detail-table, .team-member-table { min-width: 0; }
   .work-hours-row.work-hours-row-heading, .team-member-row.team-member-row-heading { display: none; }
