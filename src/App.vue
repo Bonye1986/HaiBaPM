@@ -30,6 +30,13 @@ const systemSettingsDraft = ref({
 });
 const profileAvatarInput = ref(null);
 const systemSettingsLogoInput = ref(null);
+const projectTemplates = ref([
+  { id: "template-standard", name: "标准软件项目", description: "适用于常规软件定制开发，包含需求、设计、开发、测试和交付阶段。", updatedAt: "2026-08-18" },
+  { id: "template-miniapp", name: "小程序交付项目", description: "适用于小程序项目，覆盖产品需求、交互设计、开发联调和上线验收。", updatedAt: "2026-08-12" },
+]);
+const projectTemplateModalVisible = ref(false);
+const projectTemplateEditingId = ref(null);
+const projectTemplateDraft = ref({ name: "", description: "" });
 const profileError = ref("");
 const profileBindingLoading = ref("");
 const accountProfile = ref({
@@ -483,6 +490,45 @@ function saveSystemSettings() {
   systemSettingsDraft.value = { ...systemSettingsDraft.value, name };
   systemSettingsDrawerVisible.value = false;
   Message.success("系统设置已保存");
+}
+function openProjectTemplateModal(template = null) {
+  projectTemplateEditingId.value = template?.id || null;
+  projectTemplateDraft.value = template
+    ? { name: template.name, description: template.description }
+    : { name: "", description: "" };
+  projectTemplateModalVisible.value = true;
+}
+function saveProjectTemplate() {
+  const name = projectTemplateDraft.value.name.trim();
+  const description = projectTemplateDraft.value.description.trim();
+  if (!name) { Message.warning("请填写模板名称"); return false; }
+  if (projectTemplates.value.some(template => template.id !== projectTemplateEditingId.value && template.name === name)) {
+    Message.warning("模板名称已存在");
+    return false;
+  }
+  const updatedAt = new Date().toISOString().slice(0, 10);
+  if (projectTemplateEditingId.value) {
+    projectTemplates.value = projectTemplates.value.map(template => template.id === projectTemplateEditingId.value ? { ...template, name, description, updatedAt } : template);
+    Message.success("项目模板已更新");
+  } else {
+    projectTemplates.value = [...projectTemplates.value, { id: `template-${Date.now()}`, name, description, updatedAt }];
+    Message.success("项目模板已添加");
+  }
+  projectTemplateModalVisible.value = false;
+  projectTemplateEditingId.value = null;
+  return true;
+}
+function removeProjectTemplate(template) {
+  Modal.confirm({
+    title: "删除项目模板",
+    content: `确定删除项目模板“${template.name}”吗？删除后不会影响已创建的项目。`,
+    okText: "确认删除",
+    cancelText: "取消",
+    onOk: () => {
+      projectTemplates.value = projectTemplates.value.filter(item => item.id !== template.id);
+      Message.success("项目模板已删除");
+    },
+  });
 }
 function handleProfileAvatarChange(event) {
   const file = event.target.files?.[0];
@@ -1591,10 +1637,41 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
     </div>
 
     <a-modal v-model:visible="taskModalVisible" title="新建任务" ok-text="创建任务" cancel-text="取消" :ok-button-props="{ disabled: !draft.title.trim() }" @ok="createTask"><div class="modal-context"><span>项目期号</span><strong>{{ selectedPhase.code }} {{ selectedPhase.projectName }}-{{ selectedPhase.name }}</strong></div><a-form layout="vertical"><a-form-item label="任务名称" required><a-input v-model="draft.title" autofocus placeholder="填写明确、可交付的任务名称" /></a-form-item><div class="form-grid"><a-form-item label="状态"><a-select v-model="draft.status"><a-option v-for="status in ['未完成', '待确认', '已完成']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="确认人"><a-select v-model="draft.confirmer"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item><a-form-item label="执行人"><a-select v-model="draft.executors" multiple :max-tag-count="2" placeholder="可选择多个执行人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item><a-form-item label="优先级"><a-select v-model="draft.priority"><a-option v-for="priority in ['P0', 'P1', 'P2']" :key="priority" :value="priority">{{ priority }}</a-option></a-select></a-form-item><a-form-item label="截止时间"><a-input v-model="draft.due" type="date" /></a-form-item></div><a-form-item label="任务描述"><RichTextEditor v-model="draft.description" placeholder="补充任务目标、验收标准、依赖或交付物" /></a-form-item><section class="subtask-builder"><header><strong>子任务</strong><span>{{ draft.subtasks.length }} 项</span></header><div class="subtask-add-row"><a-input v-model="subtaskDraft" placeholder="添加子任务名称" @keyup.enter="addSubtask" /><a-select v-model="subtaskAssigneeDraft" class="subtask-assignee-select" allow-search placeholder="执行人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-button type="outline" @click="addSubtask"><IconPlus />添加</a-button></div><div v-if="draft.subtasks.length" class="subtask-list"><div v-for="subtask in draft.subtasks" :key="subtask.id"><span><a-tag color="gray">未完成</a-tag>{{ subtask.title }}</span><span class="draft-subtask-actions"><a-select v-model="subtask.assignee" size="small" allow-search><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-button type="text" size="small" aria-label="移除子任务" @click="removeSubtask(subtask)"><IconDelete /></a-button></span></div></div></section></a-form></a-modal>
-    <a-drawer v-model:visible="systemSettingsDrawerVisible" width="620px" title="系统设置"><section class="system-settings-section"><header><strong>基础设置</strong><span>用于项目管理系统的通用展示和默认规则</span></header><a-form layout="vertical"><a-form-item label="系统名称" required><a-input v-model="systemSettingsDraft.name" maxlength="30" placeholder="填写系统名称" /></a-form-item><a-form-item label="系统 Logo"><div class="system-logo-picker"><div class="system-logo-preview"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" /><IconArrowRise v-else /></div><div><input ref="systemSettingsLogoInput" class="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @change="handleSystemLogoChange" /><a-button type="outline" size="small" @click="systemSettingsLogoInput?.click()"><IconImport />上传 Logo</a-button><a-button v-if="systemSettingsDraft.logoUrl" type="text" size="small" @click="systemSettingsDraft.logoUrl = ''"><IconDelete />移除</a-button><small>支持 PNG、JPG、WEBP 或 SVG，文件不超过 5 MB</small></div></div></a-form-item></a-form></section><section class="system-settings-section"><header><strong>任务规则</strong><span>新建任务和到期提醒的系统默认配置</span></header><a-form layout="vertical"><a-form-item label="默认任务状态"><a-select v-model="systemSettingsDraft.defaultTaskStatus"><a-option value="未完成">未完成</a-option><a-option value="待确认">待确认</a-option></a-select></a-form-item></a-form><div class="system-settings-switch"><span><b>任务到期提醒</b><small>在任务临近截止时间时向相关成员发送通知</small></span><a-switch v-model="systemSettingsDraft.taskDueReminder" /></div></section><section class="system-settings-section"><header><strong>协作与通知</strong><span>控制日报提醒和外部成员加入流程</span></header><div class="system-settings-switch"><span><b>日报提交提醒</b><small>在工作日结束前提醒成员提交日报</small></span><a-switch v-model="systemSettingsDraft.dailyReportReminder" /></div><div class="system-settings-switch"><span><b>外部成员邀请审核</b><small>外部成员接受邀请后需管理员确认才可访问项目</small></span><a-switch v-model="systemSettingsDraft.externalInviteReview" /></div></section><template #footer><div class="drawer-footer"><a-button @click="systemSettingsDrawerVisible = false">取消</a-button><a-button type="primary" @click="saveSystemSettings">保存</a-button></div></template></a-drawer>
+    <a-drawer v-model:visible="systemSettingsDrawerVisible" width="620px" title="系统设置">
+      <section class="system-settings-section">
+        <header><strong>基础设置</strong><span>用于项目管理系统的通用展示和默认规则</span></header>
+        <a-form layout="vertical">
+          <a-form-item label="系统名称" required><a-input v-model="systemSettingsDraft.name" maxlength="30" placeholder="填写系统名称" /></a-form-item>
+          <a-form-item label="系统 Logo"><div class="system-logo-picker"><div class="system-logo-preview"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" /><IconArrowRise v-else /></div><div><input ref="systemSettingsLogoInput" class="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @change="handleSystemLogoChange" /><a-button type="outline" size="small" @click="systemSettingsLogoInput?.click()"><IconImport />上传 Logo</a-button><a-button v-if="systemSettingsDraft.logoUrl" type="text" size="small" @click="systemSettingsDraft.logoUrl = ''"><IconDelete />移除</a-button><small>支持 PNG、JPG、WEBP 或 SVG，文件不超过 5 MB</small></div></div></a-form-item>
+        </a-form>
+      </section>
+      <section class="system-settings-section">
+        <header><strong>项目模板管理</strong><span>预设项目交付结构，新建项目时可快速套用</span></header>
+        <div class="project-template-toolbar"><span>共 {{ projectTemplates.length }} 个模板</span><a-button type="outline" size="small" @click="openProjectTemplateModal()"><IconPlus />添加模板</a-button></div>
+        <div class="project-template-list">
+          <div v-for="template in projectTemplates" :key="template.id" class="project-template-item">
+            <div><strong>{{ template.name }}</strong><p>{{ template.description || '未填写模板说明' }}</p><small>更新于 {{ template.updatedAt }}</small></div>
+            <span class="project-template-actions"><a-tooltip content="编辑模板"><a-button type="text" size="small" aria-label="编辑项目模板" @click="openProjectTemplateModal(template)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除模板"><a-button type="text" status="danger" size="small" aria-label="删除项目模板" @click="removeProjectTemplate(template)"><IconDelete /></a-button></a-tooltip></span>
+          </div>
+          <a-empty v-if="!projectTemplates.length" description="暂无项目模板" />
+        </div>
+      </section>
+      <section class="system-settings-section">
+        <header><strong>任务规则</strong><span>新建任务和到期提醒的系统默认配置</span></header>
+        <a-form layout="vertical"><a-form-item label="默认任务状态"><a-select v-model="systemSettingsDraft.defaultTaskStatus"><a-option value="未完成">未完成</a-option><a-option value="待确认">待确认</a-option></a-select></a-form-item></a-form>
+        <div class="system-settings-switch"><span><b>任务到期提醒</b><small>在任务临近截止时间时向相关成员发送通知</small></span><a-switch v-model="systemSettingsDraft.taskDueReminder" /></div>
+      </section>
+      <section class="system-settings-section">
+        <header><strong>协作与通知</strong><span>控制日报提醒和外部成员加入流程</span></header>
+        <div class="system-settings-switch"><span><b>日报提交提醒</b><small>在工作日结束前提醒成员提交日报</small></span><a-switch v-model="systemSettingsDraft.dailyReportReminder" /></div>
+        <div class="system-settings-switch"><span><b>外部成员邀请审核</b><small>外部成员接受邀请后需管理员确认才可访问项目</small></span><a-switch v-model="systemSettingsDraft.externalInviteReview" /></div>
+      </section>
+      <template #footer><div class="drawer-footer"><a-button @click="systemSettingsDrawerVisible = false">取消</a-button><a-button type="primary" @click="saveSystemSettings">保存</a-button></div></template>
+    </a-drawer>
     <a-drawer v-model:visible="profileDrawerVisible" width="640px" title="个人信息"><div class="profile-avatar-section"><a-avatar :size="72" :image-url="profileDraft.avatarUrl">{{ profileDraft.nickname.trim().slice(0, 1) || '用' }}</a-avatar><div><strong>{{ profileDraft.nickname || '未设置昵称' }}</strong><span>{{ profileDraft.position || '未设置职务' }}</span><small>支持 JPG、PNG 等图片，文件不超过 5 MB</small></div><span class="profile-avatar-actions"><a-button type="outline" size="small" @click="profileAvatarInput?.click()"><IconImport />更换头像</a-button><a-button v-if="profileDraft.avatarUrl" type="text" size="small" @click="profileDraft.avatarUrl = ''"><IconDelete />移除</a-button></span><input ref="profileAvatarInput" class="profile-avatar-input" type="file" accept="image/*" @change="handleProfileAvatarChange" /></div><section class="profile-settings-section"><header><strong>基本资料</strong><span>用于登录识别和项目协作展示</span></header><a-form layout="vertical"><div class="form-grid"><a-form-item label="账号" required><a-input v-model="profileDraft.account" allow-clear placeholder="手机号、邮箱或成员账号" @input="profileError = ''" /></a-form-item><a-form-item label="手机号"><a-input v-model="profileDraft.phone" allow-clear maxlength="11" placeholder="用于安全验证和联系" @input="profileError = ''" /></a-form-item><a-form-item label="昵称" required><a-input v-model="profileDraft.nickname" allow-clear maxlength="20" placeholder="协作中显示的名称" @input="profileError = ''" /></a-form-item><a-form-item label="职务" required><a-input v-model="profileDraft.position" allow-clear maxlength="30" placeholder="例如：项目经理" @input="profileError = ''" /></a-form-item></div></a-form><p v-if="profileError" class="profile-error" role="alert">{{ profileError }}</p></section><section class="profile-settings-section"><header><strong>第三方账号</strong><span>绑定后可使用对应平台授权登录</span></header><div class="profile-security-list"><div><span class="profile-security-icon wecom"><IconSafe /></span><span><b>企业微信</b><small>{{ profileDraft.wecomBound ? '已绑定，可使用企业微信授权登录' : '未绑定' }}</small></span><a-tag :color="profileDraft.wecomBound ? 'green' : 'gray'">{{ profileDraft.wecomBound ? '已绑定' : '未绑定' }}</a-tag><a-button v-if="profileDraft.wecomBound" type="text" size="small" @click="unbindProfileAccount('企业微信')">解绑</a-button><a-button v-else type="outline" size="small" :loading="profileBindingLoading === '企业微信'" :disabled="Boolean(profileBindingLoading)" @click="bindProfileAccount('企业微信')">绑定</a-button></div><div><span class="profile-security-icon wechat"><IconWechat /></span><span><b>微信</b><small>{{ profileDraft.wechatBound ? '已绑定，可使用微信授权登录' : '未绑定' }}</small></span><a-tag :color="profileDraft.wechatBound ? 'green' : 'gray'">{{ profileDraft.wechatBound ? '已绑定' : '未绑定' }}</a-tag><a-button v-if="profileDraft.wechatBound" type="text" size="small" @click="unbindProfileAccount('微信')">解绑</a-button><a-button v-else type="outline" size="small" :loading="profileBindingLoading === '微信'" :disabled="Boolean(profileBindingLoading)" @click="bindProfileAccount('微信')">绑定</a-button></div></div></section><section class="profile-settings-section"><header><strong>登录安全</strong><span>定期更新密码可以降低账号风险</span></header><div class="profile-security-list"><div><span class="profile-security-icon password"><IconLock /></span><span><b>登录密码</b><small>已设置，修改后请使用新密码登录</small></span><a-tag color="green">已设置</a-tag><a-button type="outline" size="small" @click="openPasswordModal">修改密码</a-button></div></div></section><template #footer><div class="drawer-footer"><a-button @click="profileDrawerVisible = false">取消</a-button><a-button type="primary" @click="saveProfile">保存</a-button></div></template></a-drawer>
     <a-modal v-model:visible="teamMemberModalVisible" :title="teamMemberEditingId ? '编辑成员账号' : '添加成员账号'" ok-text="保存" cancel-text="取消" :on-before-ok="saveTeamMember"><a-form layout="vertical"><div class="form-grid"><a-form-item label="姓名" required><a-input v-model="teamMemberDraft.name" allow-clear placeholder="填写成员姓名" /></a-form-item><a-form-item label="成员类型" required><a-select v-model="teamMemberDraft.type"><a-option value="内部成员">内部成员</a-option><a-option value="外部协作成员">外部协作成员</a-option><a-option value="项目客户">项目客户</a-option></a-select></a-form-item><a-form-item label="账号" required><a-input v-model="teamMemberDraft.account" allow-clear placeholder="邮箱或成员账号" /></a-form-item><a-form-item label="手机号"><a-input v-model="teamMemberDraft.phone" allow-clear maxlength="11" placeholder="11 位手机号" /></a-form-item><a-form-item label="状态" required><a-select v-model="teamMemberDraft.status"><a-option value="启用">启用</a-option><a-option value="禁用">禁用</a-option></a-select></a-form-item></div><a-form-item label="职务" required><a-input v-model="teamMemberDraft.role" allow-clear placeholder="例如：前端开发、客户联系人" /></a-form-item><a-form-item :label="teamMemberEditingId ? '登录密码（留空不修改）' : '登录密码'" :required="!teamMemberEditingId"><a-input-password v-model="teamMemberDraft.password" allow-clear autocomplete="new-password" placeholder="至少 8 个字符"><template #prefix><IconLock /></template></a-input-password></a-form-item><div class="team-member-binding-fields"><span><b>微信绑定</b><small>{{ teamMemberDraft.wechatBound ? '已绑定，可使用微信授权登录' : '未绑定' }}</small></span><a-switch v-model="teamMemberDraft.wechatBound" /><span><b>企业微信绑定</b><small>{{ teamMemberDraft.wecomBound ? '已绑定，可使用企业微信授权登录' : '未绑定' }}</small></span><a-switch v-model="teamMemberDraft.wecomBound" /></div><p class="team-member-modal-note"><IconInfoCircle />新成员默认分配“工作台”权限，可在成员列表中继续设置权限。</p></a-form></a-modal>
     <a-modal v-model:visible="teamPermissionsModalVisible" title="权限设置" ok-text="保存权限" cancel-text="取消" :on-before-ok="saveTeamPermissions"><div v-if="teamPermissionsMember" class="team-permission-modal"><header><a-avatar :size="38">{{ teamPermissionsMember.name.slice(0, 1) }}</a-avatar><div><strong>{{ teamPermissionsMember.name }}</strong><small>{{ teamPermissionsMember.account }} · {{ teamPermissionsMember.type }}</small></div></header><a-checkbox-group v-model="teamPermissionsDraft" class="team-permission-options"><a-checkbox v-for="permission in teamPermissionOptions" :key="permission" :value="permission">{{ permission }}</a-checkbox></a-checkbox-group><p class="team-member-modal-note"><IconInfoCircle />权限变更会影响该成员可访问的页面和操作范围。</p></div></a-modal>
+    <a-modal v-model:visible="projectTemplateModalVisible" :title="projectTemplateEditingId ? '编辑项目模板' : '添加项目模板'" ok-text="保存" cancel-text="取消" :on-before-ok="saveProjectTemplate"><a-form layout="vertical"><a-form-item label="模板名称" required><a-input v-model="projectTemplateDraft.name" maxlength="30" show-word-limit allow-clear placeholder="例如：标准软件项目" /></a-form-item><a-form-item label="模板说明"><a-textarea v-model="projectTemplateDraft.description" maxlength="120" show-word-limit allow-clear :auto-size="{ minRows: 3, maxRows: 5 }" placeholder="说明该模板适用的项目类型和交付阶段" /></a-form-item></a-form></a-modal>
     <a-modal v-model:visible="passwordModalVisible" title="修改密码" ok-text="保存密码" cancel-text="取消" :on-before-ok="submitPasswordChange"><a-form layout="vertical" @submit.prevent="submitPasswordChange"><a-form-item label="当前密码" required><a-input-password v-model="passwordDraft.currentPassword" allow-clear autocomplete="current-password" placeholder="请输入当前密码" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><a-form-item label="新密码" required><a-input-password v-model="passwordDraft.newPassword" allow-clear autocomplete="new-password" placeholder="至少 8 个字符" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><a-form-item label="确认新密码" required><a-input-password v-model="passwordDraft.confirmPassword" allow-clear autocomplete="new-password" placeholder="请再次输入新密码" @input="passwordError = ''"><template #prefix><IconLock /></template></a-input-password></a-form-item><p v-if="passwordError" class="password-error" role="alert">{{ passwordError }}</p><p class="password-help"><IconInfoCircle />当前为演示环境，密码不会保存在浏览器本地。</p></a-form></a-modal>
     <a-modal v-model:visible="laneModalVisible" :title="laneEditingKey ? '编辑看板列' : '添加看板列'" ok-text="保存" cancel-text="取消" :ok-button-props="{ disabled: !laneDraft.title.trim() }" @ok="saveLane"><a-form layout="vertical"><a-form-item label="列名称" required><a-input v-model="laneDraft.title" maxlength="20" show-word-limit placeholder="例如：待客户确认" /></a-form-item><a-form-item label="列颜色"><a-select v-model="laneDraft.color"><a-option v-for="option in laneColorOptions" :key="option.value" :value="option.value">{{ option.label }}</a-option></a-select></a-form-item></a-form></a-modal>
 
