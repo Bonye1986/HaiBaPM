@@ -1196,11 +1196,16 @@ h1, h2, h3, p { margin: 0; }
   .task-subtask-row > .arco-tag { grid-column: 3; grid-row: 1; }
   .task-subtask-row > .task-subtask-actions { grid-column: 3; grid-row: 2; }
   .task-drawer-meta-editable { grid-template-columns: 1fr; }
-  .global-header { height: var(--header-height); grid-template-columns: 1fr auto; grid-template-rows: 56px 56px; padding: 0 10px; }
-  .brand strong { display: block; }
-  .global-nav.arco-menu-horizontal { height: 56px; grid-column: 1 / -1; grid-row: 2; border-top: 1px solid #f2f3f5; }
-  .global-nav.arco-menu-horizontal .arco-menu-inner, .global-nav.arco-menu-horizontal .arco-menu-item { height: 56px; }
-  .global-nav.arco-menu-horizontal .arco-menu-item { line-height: 56px; }
+  .global-header { height: var(--header-height); min-width: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 56px 56px; padding: 0 10px; overflow: hidden; }
+  .brand { min-width: 0; width: 40px; }
+  .brand strong { display: none; }
+  .header-actions { min-width: 0; gap: 0; }
+  .header-actions > .arco-btn { width: 32px; min-width: 32px; padding: 0; font-size: 0; }
+  .header-actions > .arco-btn .arco-icon { font-size: 16px; }
+  .profile-trigger { width: 40px; min-width: 40px; padding: 4px; }
+  .global-nav.arco-menu-horizontal { width: 100%; min-width: 0; height: 56px; grid-column: 1 / -1; grid-row: 2; border-top: 1px solid #f2f3f5; overflow: hidden; }
+  .global-nav.arco-menu-horizontal .arco-menu-inner { width: max-content; min-width: 100%; height: 56px; overflow-x: auto; overflow-y: hidden; }
+  .global-nav.arco-menu-horizontal .arco-menu-item { height: 56px; flex: 0 0 56px; line-height: 56px; }
   .workbench-page { padding: 16px 12px 24px; }
   .task-page { padding: 16px 12px 24px; }
   .statistics-page { height: auto; min-height: calc(100dvh - var(--header-height)); padding: 16px 12px 24px; }
@@ -1214,7 +1219,30 @@ h1, h2, h3, p { margin: 0; }
   .task-page-filters .arco-radio-group { width: 100%; overflow-x: auto; }
   .task-page-filters .arco-radio-button { flex: 0 0 auto; }
   .task-page-filters .arco-select, .task-page-filters .arco-picker, .task-page-search { width: 100%; margin-left: 0; }
-  .task-page-panel { overflow-x: auto; }
+  .task-page-panel { overflow: hidden; }
+  .task-page-table, .daily-report-table { min-width: 0; }
+  .task-page-row, .daily-report-row {
+    width: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    padding: 14px;
+  }
+  .task-page-row.task-page-row-heading, .daily-report-row.daily-report-row-heading { display: none; }
+  .task-page-row > span, .daily-report-row > span { overflow: visible; white-space: normal; }
+  .task-page-row > span::before, .daily-report-row > span::before {
+    display: block;
+    margin-bottom: 3px;
+    color: #86909c;
+    content: attr(data-label);
+    font-size: 10px;
+  }
+  .task-page-row > span:first-child, .daily-report-row > span:first-child { grid-column: 1 / -1; }
+  .task-page-row > span:first-child::before, .daily-report-row > span:first-child::before { display: none; }
+  .task-page-row small, .daily-report-row small { overflow: visible; white-space: normal; }
+  .task-page-participants { grid-column: 1 / -1; }
+  .daily-report-actions { justify-content: flex-start; }
   .statistics-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
   .statistics-filters { align-items: stretch; flex-direction: column; }
   .statistics-project-filter, .statistics-scope-note { width: 100%; }
@@ -1230,7 +1258,7 @@ h1, h2, h3, p { margin: 0; }
   .daily-tabs { align-items: stretch; flex-direction: column; gap: 8px; }
   .daily-tab-buttons { gap: 18px; }
   .daily-tabs .arco-select, .daily-tabs .arco-picker, .daily-report-search, .daily-user-filter { width: 100% !important; margin-left: 0; }
-  .daily-report-table { min-width: 900px; }
+  .daily-report-table { min-width: 0; }
   .daily-report-detail-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-layout { height: auto; display: flex; flex-direction: column; gap: 8px; overflow: visible; }
   .customer-panel { height: auto; max-height: 390px; }
