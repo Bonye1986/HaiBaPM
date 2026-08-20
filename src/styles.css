@@ -241,7 +241,7 @@ h1, h2, h3, p { margin: 0; }
 .team-page-panel h2 { color: #1d2129; font-size: 15px; }
 .team-page-panel > header span { display: block; margin-top: 3px; color: #86909c; font-size: 11px; }
 .team-member-table { min-width: 980px; overflow-x: auto; }
-.team-member-row { width: 100%; min-height: 72px; display: grid; grid-template-columns: minmax(190px, 1.3fr) 105px minmax(110px, .9fr) minmax(155px, 1.1fr) minmax(190px, 1.4fr) 66px 142px; align-items: center; gap: 12px; border-bottom: 1px solid #f2f3f5; padding: 9px 16px; color: #4e5969; font-size: 12px; }
+.team-member-row { width: 100%; min-height: 72px; display: grid; grid-template-columns: minmax(190px, 1.3fr) 105px minmax(110px, .9fr) minmax(155px, 1.1fr) minmax(190px, 1.4fr) 66px 110px; align-items: center; gap: 12px; border-bottom: 1px solid #f2f3f5; padding: 9px 16px; color: #4e5969; font-size: 12px; }
 .team-member-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-member-row-heading { min-height: 42px; background: #f7f8fa; color: #4e5969; font-size: 11px; font-weight: 500; }
 .team-member-identity { display: flex; align-items: center; gap: 9px; }
@@ -252,6 +252,7 @@ h1, h2, h3, p { margin: 0; }
 .team-member-permissions { display: flex; align-items: center; gap: 4px; overflow: hidden; }
 .team-member-permissions .arco-tag { max-width: 82px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-member-permissions > small { flex: 0 0 auto; margin: 0; color: #86909c; font-size: 10px; }
+.team-member-status { display: inline-flex; align-items: center; }
 .team-member-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 1px; }
 .team-member-actions .arco-btn { width: 27px; min-width: 27px; height: 27px; padding: 0; color: #4e5969; }
 .team-member-actions .arco-btn:hover { background: #f2f7ff; color: rgb(var(--primary-6)); }
