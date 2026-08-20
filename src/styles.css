@@ -20,7 +20,6 @@ h1, h2, h3, p { margin: 0; }
 .login-page::after { background: linear-gradient(118deg, transparent 18%, rgba(255, 255, 255, .42) 42%, transparent 64%); background-size: 220% 100%; opacity: .55; animation: login-sheen 16s ease-in-out infinite; }
 .login-header { position: relative; z-index: 1; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #dde3eb; background: rgba(249, 251, 253, .94); padding: 0 28px; color: #6b7785; font-size: 12px; }
 .login-brand { display: inline-flex; align-items: center; gap: 9px; color: #1d2129; }
-.login-brand > svg { width: 34px; height: 34px; border-radius: 8px; background: rgb(var(--primary-6)); padding: 7px; color: #f9fbfd; box-shadow: 0 4px 10px rgba(22, 93, 255, .18); }
 .login-brand-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: contain; }
 .login-brand strong { font-size: 19px; }
 .login-panel { position: relative; z-index: 1; width: min(430px, calc(100% - 32px)); margin: auto; border: 1px solid rgba(220, 227, 236, .92); border-radius: 6px; background: rgba(253, 254, 254, .94); padding: 30px; box-shadow: 0 14px 34px rgba(29, 33, 41, .1); }
@@ -64,17 +63,23 @@ h1, h2, h3, p { margin: 0; }
 .brand.arco-btn { width: 160px; height: 44px; display: inline-flex; justify-content: flex-start; padding: 0; color: #1d2129; }
 .brand.arco-btn > span { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; }
 .brand.arco-btn:hover { background: transparent; }
-.brand .arco-icon {
+.pm-logo-mark {
   width: 32px;
   height: 32px;
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
   border-radius: 8px;
   background: rgb(var(--primary-6));
   color: white;
-  font-size: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
   box-shadow: 0 4px 10px rgba(22, 93, 255, .2);
 }
+.login-brand .pm-logo-mark { width: 34px; height: 34px; }
+.pm-logo-mark-large { width: 44px; height: 44px; border-radius: 7px; font-size: 17px; }
 .brand-logo { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; }
 .brand strong { margin-left: 2px; font-size: 18px; }
 .global-nav.arco-menu-horizontal { width: 100%; height: 64px; border: 0; border-bottom: 1px solid var(--line); background: transparent; box-shadow: none; }

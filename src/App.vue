@@ -1796,7 +1796,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
 
 <template>
   <main v-if="!isAuthenticated" class="login-page">
-    <header class="login-header"><span class="login-brand"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" class="login-brand-logo" /><IconArrowRise v-else /><strong>{{ systemSettingsDraft.name }}</strong></span><span>软件项目交付管理平台</span></header>
+    <header class="login-header"><span class="login-brand"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" class="login-brand-logo" /><span v-else class="pm-logo-mark" aria-label="PM">PM</span><strong>{{ systemSettingsDraft.name }}</strong></span><span>软件项目交付管理平台</span></header>
     <section class="login-panel" aria-labelledby="login-title">
       <div class="login-panel-heading"><span class="login-security-icon"><IconSafe /></span><div><h1 id="login-title">登录海拔PM</h1><p>进入项目、期号与任务协作空间</p></div></div>
       <form class="login-form" @submit.prevent="handleLogin">
@@ -1818,7 +1818,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
   </main>
   <div v-else class="app-shell">
     <header class="global-header">
-      <a-button class="brand" type="text" @click="notify(systemSettingsDraft.name)"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" class="brand-logo" /><IconArrowRise v-else /><strong>{{ systemSettingsDraft.name }}</strong></a-button>
+      <a-button class="brand" type="text" @click="notify(systemSettingsDraft.name)"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" class="brand-logo" /><span v-else class="pm-logo-mark" aria-label="PM">PM</span><strong>{{ systemSettingsDraft.name }}</strong></a-button>
       <a-menu class="global-nav" mode="horizontal" :selected-keys="[activeNav]" @menu-item-click="handleNavigation"><a-menu-item v-for="item in navItems" :key="item">{{ item }}</a-menu-item></a-menu>
       <div class="header-actions">
         <a-tooltip content="系统设置"><a-button type="text" aria-label="系统设置" @click="openSystemSettings"><IconSettings />设置</a-button></a-tooltip>
@@ -1920,7 +1920,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
         <header><strong>基础设置</strong><span>用于项目管理系统的通用展示和默认规则</span></header>
         <a-form layout="vertical">
           <a-form-item label="系统名称" required><a-input v-model="systemSettingsDraft.name" maxlength="30" placeholder="填写系统名称" /></a-form-item>
-          <a-form-item label="系统 Logo"><div class="system-logo-picker"><div class="system-logo-preview"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" /><IconArrowRise v-else /></div><div><input ref="systemSettingsLogoInput" class="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @change="handleSystemLogoChange" /><a-button type="outline" size="small" @click="systemSettingsLogoInput?.click()"><IconImport />上传 Logo</a-button><a-button v-if="systemSettingsDraft.logoUrl" type="text" size="small" @click="systemSettingsDraft.logoUrl = ''"><IconDelete />移除</a-button><small>支持 PNG、JPG、WEBP 或 SVG，文件不超过 5 MB</small></div></div></a-form-item>
+          <a-form-item label="系统 Logo"><div class="system-logo-picker"><div class="system-logo-preview"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" /><span v-else class="pm-logo-mark pm-logo-mark-large" aria-label="PM">PM</span></div><div><input ref="systemSettingsLogoInput" class="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @change="handleSystemLogoChange" /><a-button type="outline" size="small" @click="systemSettingsLogoInput?.click()"><IconImport />上传 Logo</a-button><a-button v-if="systemSettingsDraft.logoUrl" type="text" size="small" @click="systemSettingsDraft.logoUrl = ''"><IconDelete />移除</a-button><small>支持 PNG、JPG、WEBP 或 SVG，文件不超过 5 MB</small></div></div></a-form-item>
         </a-form>
       </section>
       <section class="system-settings-section">
