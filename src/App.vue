@@ -80,6 +80,7 @@ const selectedDailyReport = ref(null);
 const workHoursDateRange = ref([]);
 const workHoursMember = ref("全部成员");
 const workHoursKeyword = ref("");
+const statsProjectFilter = ref("全部项目");
 const teamMembers = reactive(["李项目", "王芳", "张伟", "赵敏", "陈晨", "刘洋"]);
 const teamDirectory = ref([
   { id: "account-1", name: "李项目", account: "lixiangmu@haiba.example", phone: "13800001234", role: "项目经理", type: "内部成员", status: "启用", joinedAt: "2026-06-18", permissions: ["工作台", "项目资料", "任务管理", "团队管理"] },
@@ -264,6 +265,85 @@ const dashboardStats = computed(() => {
   return { total, inProgress: phases.filter(phase => phase.status === "进行中").length, completed, delayed, delayRate: total ? Math.round(delayed / total * 100) : 0, completionRate: total ? Math.round(completed / total * 100) : 0 };
 });
 const dashboardDate = computed(() => new Date().toISOString().slice(0, 10));
+const statsProjectOptions = computed(() => {
+  const projectsByKey = new Map();
+  dashboardPhaseRows.value.forEach(phase => {
+    if (!projectsByKey.has(phase.projectKey)) projectsByKey.set(phase.projectKey, `${phase.customerCode}-${phase.projectCode} · ${phase.projectName}`);
+  });
+  return [...projectsByKey.entries()].map(([value, label]) => ({ value, label }));
+});
+const statsFilteredPhases = computed(() => dashboardPhaseRows.value.filter(phase => statsProjectFilter.value === "全部项目" || phase.projectKey === statsProjectFilter.value));
+const statsFilteredTasks = computed(() => {
+  const visiblePhaseKeys = new Set(statsFilteredPhases.value.map(phase => phase.key));
+  return tasks.value.filter(task => visiblePhaseKeys.has(task.phase));
+});
+const statsOverview = computed(() => {
+  const phases = statsFilteredPhases.value;
+  const taskRows = statsFilteredTasks.value;
+  const logs = phases.flatMap(phase => phaseWorklogs.value[phase.key] || []);
+  const reports = dailyReportSeed.filter(report => phases.some(phase => phase.key === report.phase));
+  const completedPhases = phases.filter(phase => phase.status === "已完成").length;
+  const delayedPhases = phases.filter(phase => phase.status === "延期").length;
+  const overdueTasks = taskRows.filter(task => task.status !== "已完成" && task.due < dashboardDate.value).length;
+  const completedTasks = taskRows.filter(task => task.status === "已完成").length;
+  return {
+    phases: phases.length,
+    inProgress: phases.filter(phase => phase.status === "进行中").length,
+    completed: completedPhases,
+    delayed: delayedPhases,
+    delayRate: phases.length ? Math.round(delayedPhases / phases.length * 100) : 0,
+    completionRate: phases.length ? Math.round(completedPhases / phases.length * 100) : 0,
+    tasks: taskRows.length,
+    completedTasks,
+    taskCompletionRate: taskRows.length ? Math.round(completedTasks / taskRows.length * 100) : 0,
+    overdueTasks,
+    hours: logs.reduce((sum, log) => sum + Number(log.hours || 0), 0),
+    reports: reports.length,
+    pendingReports: reports.filter(report => ["待确认", "草稿"].includes(report.status)).length,
+  };
+});
+const statsStatusRows = computed(() => ["进行中", "未开始", "已完成", "延期"].map(status => {
+  const count = statsFilteredPhases.value.filter(phase => phase.status === status).length;
+  return { status, count, percent: statsFilteredPhases.value.length ? Math.round(count / statsFilteredPhases.value.length * 100) : 0 };
+}));
+const statsProjectRows = computed(() => {
+  const grouped = new Map();
+  statsFilteredPhases.value.forEach(phase => {
+    const row = grouped.get(phase.projectKey) || { key: phase.projectKey, label: `${phase.customerCode}-${phase.projectCode} · ${phase.projectName}`, phases: 0, inProgress: 0, completed: 0, delayed: 0, progressTotal: 0 };
+    row.phases += 1;
+    row.inProgress += phase.status === "进行中" ? 1 : 0;
+    row.completed += phase.status === "已完成" ? 1 : 0;
+    row.delayed += phase.status === "延期" ? 1 : 0;
+    row.progressTotal += Number(phase.progress || 0);
+    grouped.set(phase.projectKey, row);
+  });
+  return [...grouped.values()].map(row => ({ ...row, averageProgress: row.phases ? Math.round(row.progressTotal / row.phases) : 0 }));
+});
+const statsMemberRows = computed(() => {
+  const rows = new Map();
+  const visiblePhaseKeys = new Set(statsFilteredPhases.value.map(phase => phase.key));
+  statsFilteredTasks.value.forEach(task => {
+    const names = new Set([task.owner, task.createdBy, task.confirmer, ...(task.executors || [])].filter(Boolean));
+    names.forEach(name => {
+      const row = rows.get(name) || { name, tasks: 0, completed: 0, overdue: 0, hours: 0 };
+      row.tasks += 1;
+      row.completed += task.status === "已完成" ? 1 : 0;
+      row.overdue += task.status !== "已完成" && task.due < dashboardDate.value ? 1 : 0;
+      rows.set(name, row);
+    });
+  });
+  visiblePhaseKeys.forEach(phaseKey => (phaseWorklogs.value[phaseKey] || []).forEach(log => {
+    const row = rows.get(log.member) || { name: log.member, tasks: 0, completed: 0, overdue: 0, hours: 0 };
+    row.hours += Number(log.hours || 0);
+    rows.set(log.member, row);
+  }));
+  return [...rows.values()].map(row => ({ ...row, completionRate: row.tasks ? Math.round(row.completed / row.tasks * 100) : 0 })).sort((a, b) => b.tasks - a.tasks || b.hours - a.hours || a.name.localeCompare(b.name, "zh-CN"));
+});
+const statsRiskTasks = computed(() => {
+  const phaseMap = new Map(statsFilteredPhases.value.map(phase => [phase.key, phase]));
+  return statsFilteredTasks.value.filter(task => task.status !== "已完成" && task.due < dashboardDate.value).sort((a, b) => ({ P0: 0, P1: 1, P2: 2 }[a.priority] ?? 3) - ({ P0: 0, P1: 1, P2: 2 }[b.priority] ?? 3) || a.due.localeCompare(b.due)).map(task => ({ ...task, phase: phaseMap.get(task.phase) || phaseByKey(task.phase) }));
+});
+const statsReportSummary = computed(() => ["已发送", "待确认", "已退回", "草稿"].map(status => ({ status, count: dailyReportSeed.filter(report => statsFilteredPhases.value.some(phase => phase.key === report.phase) && report.status === status).length })));
 const taskPageRows = computed(() => {
   const keyword = taskPageKeyword.value.trim();
   const currentUser = accountProfile.value.nickname;
@@ -404,7 +484,7 @@ watch([normalizedKeyword, filteredProjects], () => {
 });
 function notify(text) { Message.info(text); }
 function handleNavigation(key) {
-  if (["工作台", "项目", "任务", "日报", "工时", "团队"].includes(key)) { activeNav.value = key; return; }
+  if (["工作台", "项目", "任务", "日报", "工时", "团队", "统计"].includes(key)) { activeNav.value = key; return; }
   activeNav.value = "项目";
   notify(`${key}模块将在后续设计`);
 }
@@ -1614,6 +1694,34 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <header class="team-page-heading"><div><span class="workbench-eyebrow">账号与权限</span><h1>团队</h1><p>管理内部成员、外部协作成员和项目客户账号、登录状态与系统权限。</p></div><a-button type="primary" @click="openTeamMemberModal()"><IconPlus />添加成员</a-button></header>
       <section class="team-page-toolbar"><a-radio-group v-model="teamTypeFilter" type="button"><a-radio value="全部类型">全部成员 <b>{{ teamDirectory.length }}</b></a-radio><a-radio value="内部成员">内部成员 <b>{{ teamDirectory.filter(member => member.type === '内部成员').length }}</b></a-radio><a-radio value="外部协作成员">外部协作成员 <b>{{ teamDirectory.filter(member => ['外部协作成员', '外包成员'].includes(member.type)).length }}</b></a-radio><a-radio value="项目客户">项目客户 <b>{{ teamDirectory.filter(member => member.type === '项目客户').length }}</b></a-radio></a-radio-group><a-input v-model="teamKeyword" class="team-page-search" allow-clear placeholder="搜索姓名、账号或职务"><template #prefix><IconSearch /></template></a-input></section>
       <section class="team-page-panel"><header><div><h2>成员列表</h2><span>共 {{ filteredTeamMembers.length }} 人 · 可编辑账号和系统权限</span></div></header><div class="team-member-table"><div class="team-member-row team-member-row-heading"><span>成员</span><span>成员类型</span><span>职务</span><span>联系方式</span><span>权限</span><span>状态</span><span>操作</span></div><div v-for="member in filteredTeamMembers" :key="member.id" class="team-member-row"><span class="team-member-identity"><a-avatar :size="34">{{ member.name.slice(0, 1) }}</a-avatar><span><strong>{{ member.name }}</strong><small>{{ member.account }}</small></span></span><span><a-tag :color="member.type === '项目客户' ? 'purple' : (['外部协作成员', '外包成员'].includes(member.type) ? 'orange' : 'arcoblue')">{{ member.type === '外包成员' ? '外部协作成员' : member.type }}</a-tag></span><span>{{ member.role }}</span><span><strong>{{ member.phone || '未填写' }}</strong><small>加入于 {{ member.joinedAt }}</small></span><span class="team-member-permissions"><a-tag v-for="permission in member.permissions.slice(0, 3)" :key="permission" color="gray">{{ permission }}</a-tag><small v-if="member.permissions.length > 3">+{{ member.permissions.length - 3 }}</small></span><span class="team-member-status"><a-tooltip :content="member.status === '启用' ? '点击禁用账号' : '点击启用账号'"><a-switch :model-value="member.status === '启用'" :disabled="member.name === accountProfile.nickname" :aria-label="member.status === '启用' ? '禁用账号' : '启用账号'" @change="toggleTeamMemberStatus(member)" /></a-tooltip></span><span class="team-member-actions"><a-tooltip content="权限设置"><a-button type="text" size="small" aria-label="权限设置" @click="openTeamPermissions(member)"><IconSafe /></a-button></a-tooltip><a-tooltip content="编辑成员"><a-button type="text" size="small" aria-label="编辑成员" @click="openTeamMemberModal(member)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除成员"><a-button type="text" size="small" status="danger" aria-label="删除成员" @click="deleteTeamMember(member)"><IconDelete /></a-button></a-tooltip></span></div><a-empty v-if="!filteredTeamMembers.length" description="暂无匹配的成员" /></div></section>
+    </main>
+    <main v-else-if="activeNav === '统计'" class="statistics-page">
+      <header class="statistics-heading">
+        <div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 交付数据</span><h1>统计</h1><p>从期号、任务、工时和日报四个维度查看交付状态与管理风险。</p></div>
+      </header>
+      <section class="statistics-filters">
+        <a-select v-model="statsProjectFilter" class="statistics-project-filter" allow-search><a-option value="全部项目">全部项目</a-option><a-option v-for="project in statsProjectOptions" :key="project.value" :value="project.value">{{ project.label }}</a-option></a-select>
+        <span class="statistics-scope-note"><IconSafe />{{ isManagementRole ? '已纳入当前系统全部可见数据' : '仅统计与你相关的项目期号' }}</span>
+      </section>
+      <section class="statistics-kpi-grid">
+        <article class="statistics-kpi-card"><span>项目期号</span><strong>{{ statsOverview.phases }}</strong><small>当前筛选范围</small></article>
+        <article class="statistics-kpi-card"><span>进行中期号</span><strong>{{ statsOverview.inProgress }}</strong><small>正在交付</small></article>
+        <article class="statistics-kpi-card"><span>已完成期号</span><strong>{{ statsOverview.completed }}</strong><small>完成率 {{ statsOverview.completionRate }}%</small></article>
+        <article class="statistics-kpi-card is-danger"><span>延期期号</span><strong>{{ statsOverview.delayed }}</strong><small>延期率 {{ statsOverview.delayRate }}%</small></article>
+        <article class="statistics-kpi-card"><span>任务总数</span><strong>{{ statsOverview.tasks }}</strong><small>完成率 {{ statsOverview.taskCompletionRate }}%</small></article>
+        <article class="statistics-kpi-card is-danger"><span>逾期任务</span><strong>{{ statsOverview.overdueTasks }}</strong><small>需要优先处理</small></article>
+        <article class="statistics-kpi-card"><span>已登记工时</span><strong>{{ statsOverview.hours }}h</strong><small>当前期号工时记录</small></article>
+        <article class="statistics-kpi-card is-warning"><span>日报待处理</span><strong>{{ statsOverview.pendingReports }}</strong><small>共 {{ statsOverview.reports }} 份日报</small></article>
+      </section>
+      <div class="statistics-grid">
+        <section class="statistics-panel"><header><div><h2>期号状态分布</h2><span>按当前可见期号统计</span></div><b>{{ statsOverview.phases }} 个期号</b></header><div class="statistics-status-list"><div v-for="row in statsStatusRows" :key="row.status" class="statistics-bar-row"><span><strong>{{ row.status }}</strong><small>{{ row.count }} 个 · {{ row.percent }}%</small></span><div class="statistics-bar-track"><i :class="`status-${row.status}`" :style="{ width: `${row.percent}%` }"></i></div></div><a-empty v-if="!statsStatusRows.some(row => row.count)" description="暂无期号数据" /></div></section>
+        <section class="statistics-panel"><header><div><h2>日报处理情况</h2><span>关联期号的日报状态</span></div><b>{{ statsOverview.reports }} 份日报</b></header><div class="statistics-report-summary"><div v-for="row in statsReportSummary" :key="row.status"><a-tag :color="dailyReportStatusColors[row.status]">{{ row.status }}</a-tag><strong>{{ row.count }}</strong></div></div><div class="statistics-panel-foot"><span>待确认和草稿需要管理者跟进</span><a-button type="text" size="small" @click="activeNav = '日报'">查看日报 <IconArrowRise /></a-button></div></section>
+      </div>
+      <section class="statistics-panel statistics-table-panel"><header><div><h2>项目交付汇总</h2><span>按项目查看期号数量、状态和平均完成度</span></div><b>{{ statsProjectRows.length }} 个项目</b></header><div class="statistics-table"><div class="statistics-table-row statistics-table-heading"><span>项目</span><span>期号数</span><span>进行中</span><span>已完成</span><span>延期</span><span>平均完成度</span></div><div v-for="row in statsProjectRows" :key="row.key" class="statistics-table-row"><span><strong>{{ row.label }}</strong></span><span>{{ row.phases }}</span><span>{{ row.inProgress }}</span><span>{{ row.completed }}</span><span><a-tag v-if="row.delayed" color="red">{{ row.delayed }}</a-tag><span v-else>0</span></span><span class="statistics-progress-cell"><i><em :style="{ width: `${row.averageProgress}%` }"></em></i><b>{{ row.averageProgress }}%</b></span></div><a-empty v-if="!statsProjectRows.length" description="暂无项目数据" /></div></section>
+      <div class="statistics-grid">
+        <section class="statistics-panel"><header><div><h2>团队负载</h2><span>按任务关联人与登记工时汇总</span></div><b>{{ statsMemberRows.length }} 人</b></header><div class="statistics-table statistics-member-table"><div class="statistics-table-row statistics-table-heading"><span>成员</span><span>任务</span><span>完成率</span><span>工时</span><span>逾期</span></div><div v-for="row in statsMemberRows" :key="row.name" class="statistics-table-row"><span><strong>{{ row.name }}</strong></span><span>{{ row.tasks }}</span><span>{{ row.completionRate }}%</span><span>{{ row.hours }}h</span><span><a-tag v-if="row.overdue" color="red">{{ row.overdue }}</a-tag><span v-else>0</span></span></div><a-empty v-if="!statsMemberRows.length" description="暂无成员负载数据" /></div></section>
+        <section class="statistics-panel"><header><div><h2>风险任务</h2><span>未完成且已超过截止时间</span></div><b class="statistics-danger-count">{{ statsRiskTasks.length }} 项</b></header><div class="statistics-risk-list"><button v-for="task in statsRiskTasks.slice(0, 6)" :key="task.id" class="statistics-risk-item" @click="selectedPhaseKey = task.phase.key; onTaskRowClick(task)"><span class="statistics-risk-priority"><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag><small>{{ task.due }}</small></span><span><strong>{{ task.title }}</strong><small>{{ task.phase.code }} · {{ task.phase.name }} · {{ task.owner }}</small></span><IconArrowRise /></button><a-empty v-if="!statsRiskTasks.length" description="暂无逾期任务" /><div v-if="statsRiskTasks.length > 6" class="statistics-panel-foot"><span>仅显示最需要关注的 6 项</span><a-button type="text" size="small" @click="activeNav = '任务'">查看全部 <IconArrowRise /></a-button></div></div></section>
+      </div>
     </main>
     <div v-else class="project-layout">
       <aside class="project-navigator">
