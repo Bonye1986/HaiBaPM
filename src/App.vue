@@ -60,6 +60,9 @@ const dailyReportDateRange = ref([]);
 const dailyReportUser = ref("全部成员");
 const dailyReportKeyword = ref("");
 const selectedDailyReport = ref(null);
+const workHoursDateRange = ref([]);
+const workHoursMember = ref("全部成员");
+const workHoursKeyword = ref("");
 const teamMembers = ["李项目", "王芳", "张伟", "赵敏", "陈晨", "刘洋"];
 const tasks = ref(taskSeed.map((task, index) => ({
   ...task,
@@ -254,7 +257,41 @@ const dailyReportRows = computed(() => {
     const userMatch = dailyReportTab.value === "mine" || dailyReportUser.value === "全部成员" || report.sender === dailyReportUser.value;
     const keywordMatch = !keyword || `${report.name}${report.sender}${phaseByKey(report.phase)?.code || ""}${phaseByKey(report.phase)?.name || ""}`.includes(keyword);
     return tabMatch && statusMatch && dateMatch && userMatch && keywordMatch;
-  }).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+}).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+});
+const workHoursMembers = computed(() => {
+  const visiblePhaseKeys = new Set(dashboardPhaseRows.value.map(phase => phase.key));
+  const members = new Set();
+  visiblePhaseKeys.forEach(key => (phaseWorklogs.value[key] || []).forEach(log => members.add(log.member)));
+  return teamMembers.filter(member => members.has(member));
+});
+const workHoursFilteredLogs = computed(() => {
+  const keyword = workHoursKeyword.value.trim();
+  const [startDate, endDate] = workHoursDateRange.value || [];
+  const visiblePhaseKeys = new Set(dashboardPhaseRows.value.map(phase => phase.key));
+  return Array.from(visiblePhaseKeys).flatMap(phaseKey => {
+    const phase = dashboardPhaseRows.value.find(item => item.key === phaseKey) || phaseByKey(phaseKey);
+    const phaseText = `${phase?.code || ""}${phase?.name || ""}${phase?.projectCode || ""}${phase?.projectName || ""}`;
+    if (keyword && !phaseText.includes(keyword)) return [];
+    return (phaseWorklogs.value[phaseKey] || []).filter(log => (
+      (workHoursMember.value === "全部成员" || log.member === workHoursMember.value)
+      && (!startDate || log.date >= startDate)
+      && (!endDate || log.date <= endDate)
+    )).map(log => ({ ...log, phaseKey, phase }));
+  });
+});
+const workHoursPhaseRows = computed(() => {
+  const keyword = workHoursKeyword.value.trim();
+  return dashboardPhaseRows.value.filter(phase => !keyword || `${phase.code}${phase.name}${phase.projectCode}${phase.projectName}`.includes(keyword)).map(phase => {
+    const logs = workHoursFilteredLogs.value.filter(log => log.phaseKey === phase.key);
+    const latest = logs.reduce((current, log) => (!current || log.date > current ? log.date : current), "");
+    return { ...phase, hours: logs.reduce((sum, log) => sum + Number(log.hours || 0), 0), members: new Set(logs.map(log => log.member)).size, latest, logCount: logs.length };
+  });
+});
+const workHoursStats = computed(() => {
+  const totalHours = workHoursFilteredLogs.value.reduce((sum, log) => sum + Number(log.hours || 0), 0);
+  const members = new Set(workHoursFilteredLogs.value.map(log => log.member));
+  return { phases: workHoursPhaseRows.value.length, totalHours, members: members.size, average: members.size ? Math.round(totalHours / members.size * 10) / 10 : 0 };
 });
 const phaseTasks = computed(() => tasks.value.filter(task => task.phase === selectedPhaseKey.value));
 const phaseTaskStats = computed(() => ({
@@ -323,7 +360,7 @@ watch([normalizedKeyword, filteredProjects], () => {
 });
 function notify(text) { Message.info(text); }
 function handleNavigation(key) {
-  if (["工作台", "项目", "任务", "日报"].includes(key)) { activeNav.value = key; return; }
+  if (["工作台", "项目", "任务", "日报", "工时"].includes(key)) { activeNav.value = key; return; }
   activeNav.value = "项目";
   notify(`${key}模块将在后续设计`);
 }
@@ -856,6 +893,32 @@ function exportBoard() {
   const link = document.createElement("a"); link.href = url; link.download = `${selectedPhase.value.code}-看板任务.csv`; link.click(); URL.revokeObjectURL(url);
   Message.success(`已导出 ${rows.length} 个任务`);
 }
+function exportWorkHours() {
+  const rows = workHoursFilteredLogs.value.map(log => [
+    log.phase?.code || log.phaseKey,
+    log.phase?.name || "",
+    log.phase?.projectName || "",
+    log.date,
+    log.member,
+    log.hours,
+    log.content,
+  ]);
+  if (!rows.length) {
+    Message.warning("当前筛选没有可导出的工时记录");
+    return;
+  }
+  const headers = ["期号", "期号名称", "项目名称", "日期", "成员", "工时", "工作内容"];
+  const csv = [headers, ...rows]
+    .map(row => row.map(value => `"${String(value ?? "").replaceAll('"', '""')}"`).join(","))
+    .join("\n");
+  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `工时统计-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+  Message.success(`已导出 ${rows.length} 条工时记录`);
+}
 function moveTask(taskKey, targetKey, laneTitle) {
   const nextOrder = boardOrder.value.filter(id => id !== taskKey);
   const targetIndex = targetKey ? nextOrder.indexOf(targetKey) : nextOrder.length;
@@ -1167,7 +1230,7 @@ function savePhaseBasicInfo() {
   return true;
 }
 function confirmPhaseSettings() { if (savePhaseBasicInfo()) phaseDrawerVisible.value = false; }
-function openWorklogDetail(log) { selectedWorklog.value = log; }
+function openWorklogDetail(log) { selectedWorklog.value = { ...log, phase: log.phase || phaseByKey(log.phaseKey || selectedPhaseKey.value) }; }
 function openDailyReport(report) { selectedDailyReport.value = report; }
 function handleWorklogClick(event) {
   const row = event.target.closest?.(".worklog-row:not(.worklog-row-heading)");
@@ -1360,6 +1423,13 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       </section>
       <section class="daily-page-panel"><header><div><h2>{{ dailyReportTab === 'mine' ? '我的日报' : '团队日报' }}</h2><span>共 {{ dailyReportRows.length }} 份 · 点击日报查看完整内容</span></div></header><div class="daily-report-table"><div class="daily-report-row daily-report-row-heading"><span>日报名称</span><span>发送人</span><span>发送时间</span><span>关联期号</span><span>状态</span></div><button v-for="report in dailyReportRows" :key="report.id" class="daily-report-row" @click="openDailyReport(report)"><span><strong>{{ report.name }}</strong><small>{{ report.id }} · {{ report.hours }}h</small></span><span>{{ report.sender }}</span><span>{{ report.sentAt }}</span><span><strong>{{ phaseByKey(report.phase)?.code }}</strong><small>{{ phaseByKey(report.phase)?.name }}</small></span><span><a-tag :color="dailyReportStatusColors[report.status]">{{ report.status }}</a-tag></span></button><a-empty v-if="!dailyReportRows.length" description="暂无符合条件的日报" /></div></section>
     </main>
+    <main v-else-if="activeNav === '工时'" class="work-hours-page">
+      <header class="work-hours-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 工时记录</span><h1>工时</h1><p>{{ isManagementRole ? '汇总当前权限范围内的项目期号工时。' : '查看与你相关的项目期号工时记录。' }}</p></div><a-button type="primary" :disabled="!workHoursFilteredLogs.length" @click="exportWorkHours"><IconExport />导出工时</a-button></header>
+      <section class="work-hours-stat-grid"><article><span>项目期号数量</span><strong>{{ workHoursStats.phases }}</strong><small>当前筛选范围</small></article><article><span>已登记工时</span><strong>{{ workHoursStats.totalHours }}h</strong><small>筛选后的明细</small></article><article><span>参与成员</span><strong>{{ workHoursStats.members }}</strong><small>有工时记录的成员</small></article><article><span>人均工时</span><strong>{{ workHoursStats.average }}h</strong><small>按参与成员计算</small></article></section>
+      <section class="work-hours-filters"><a-range-picker v-model="workHoursDateRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /><a-select v-model="workHoursMember" class="work-hours-member-filter" allow-search><a-option value="全部成员">全部成员</a-option><a-option v-for="member in workHoursMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-input v-model="workHoursKeyword" class="work-hours-search" allow-clear placeholder="搜索期号名称"><template #prefix><IconSearch /></template></a-input><a-button type="text" :disabled="!workHoursDateRange.length && workHoursMember === '全部成员' && !workHoursKeyword" @click="workHoursDateRange = []; workHoursMember = '全部成员'; workHoursKeyword = ''">清空筛选</a-button></section>
+      <section class="work-hours-panel"><header><div><h2>期号工时汇总</h2><span>共 {{ workHoursFilteredLogs.length }} 条明细 · 按期号汇总显示</span></div></header><div class="work-hours-table"><div class="work-hours-row work-hours-row-heading"><span>期号</span><span>项目 / 期号名称</span><span>登记工时</span><span>参与成员</span><span>最近登记</span></div><button v-for="phase in workHoursPhaseRows" :key="phase.key" class="work-hours-row" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.code }}</strong><small>{{ phase.status }}</small></span><span><strong>{{ phase.projectName }}</strong><small>{{ phase.name }}</small></span><span><strong>{{ phase.hours }}h</strong><small>{{ phase.logCount }} 条记录</small></span><span>{{ phase.members }} 人</span><span>{{ phase.latest || '暂无记录' }}</span></button><a-empty v-if="!workHoursPhaseRows.length" description="暂无符合条件的期号" /></div></section>
+      <section class="work-hours-panel work-hours-detail-panel"><header><div><h2>工时明细</h2><span>包含日期、成员、工时和工作内容，可直接导出当前筛选结果</span></div></header><div class="work-hours-detail-table"><div class="work-hours-detail-row work-hours-detail-row-heading"><span>日期</span><span>期号</span><span>成员</span><span>工时</span><span>工作内容</span></div><button v-for="log in workHoursFilteredLogs" :key="log.id" class="work-hours-detail-row" @click="selectedPhaseKey = log.phaseKey; openWorklogDetail(log)"><span>{{ log.date }}</span><span><strong>{{ log.phase?.code }}</strong><small>{{ log.phase?.name }}</small></span><span>{{ log.member }}</span><strong>{{ log.hours }}h</strong><span>{{ log.content }}</span></button><a-empty v-if="!workHoursFilteredLogs.length" description="暂无符合条件的工时记录" /></div></section>
+    </main>
     <div v-else class="project-layout">
       <aside class="project-navigator">
         <div class="navigator-heading"><h1>客户 / 项目 + 期号</h1><a-radio-group class="project-view-control" type="button" size="small" v-model="projectView"><a-radio value="tree" title="项目树" aria-label="项目树"><IconMindMapping /></a-radio><a-radio value="list" title="列表" aria-label="列表"><IconList /></a-radio></a-radio-group></div>
@@ -1474,7 +1544,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
     <a-drawer :visible="Boolean(selectedProject)" width="620px" title="项目详情" @cancel="selectedProject = null"><template v-if="selectedProject"><div class="project-detail-hero"><span>{{ selectedProject.customerCode }}-{{ selectedProject.code }}</span><h2>{{ selectedProject.name }}</h2><p>{{ selectedProject.customerCode }}-{{ selectedProject.customerName }}</p></div><section class="project-public-section"><header><div><strong>项目公共资料</strong><small>项目级公共信息，供项目成员协作查看</small></div><div class="project-public-actions"><a-button type="text" size="small" @click="openProjectInfoEditor"><IconEdit />编辑资料</a-button></div></header><div v-if="selectedProjectPublicDocument" class="rich-text-display project-public-document" v-html="selectedProjectPublicDocument" /><a-empty v-else description="暂无项目公共资料" /></section></template></a-drawer>
     <a-modal v-model:visible="projectInfoModalVisible" title="编辑项目公共资料" ok-text="保存" cancel-text="取消" @ok="saveProjectInfo"><a-form layout="vertical"><a-form-item label="资料内容"><RichTextEditor v-model="projectInfoDraft" placeholder="补充客户资料、服务器信息、代码仓库、部署地址等项目公共信息" /></a-form-item></a-form></a-modal>
     <a-drawer v-model:visible="helpVisible" width="440px" title="项目模块帮助"><a-input placeholder="搜索帮助内容"><template #prefix><IconSearch /></template></a-input><div class="help-list"><details><summary>如何创建新任务？</summary><p>选择左侧期号后，在任务搜索筛选栏点击新建任务。</p></details><details><summary>项目树的层级是什么？</summary><p>项目树按客户、项目、期号三级展示，任务归属于具体期号。</p></details><details><summary>如何查看延期任务？</summary><p>使用任务搜索筛选栏中的状态筛选，选择延期。</p></details></div></a-drawer>
-    <a-modal :visible="Boolean(selectedWorklog)" title="日报详情" :footer="false" @cancel="selectedWorklog = null"><template v-if="selectedWorklog"><div class="worklog-detail"><div class="worklog-detail-meta"><span>日期<b>{{ selectedWorklog.date }}</b></span><span>成员<b>{{ selectedWorklog.member }}</b></span><span>工时<b>{{ selectedWorklog.hours }}h</b></span><span>期号<b>{{ selectedPhase.code }} · {{ selectedPhase.name }}</b></span></div><section><header><strong>工作内容</strong><small>日报记录</small></header><p>{{ selectedWorklog.content }}</p></section></div></template></a-modal>
+    <a-modal :visible="Boolean(selectedWorklog)" title="日报详情" :footer="false" @cancel="selectedWorklog = null"><template v-if="selectedWorklog"><div class="worklog-detail"><div class="worklog-detail-meta"><span>日期<b>{{ selectedWorklog.date }}</b></span><span>成员<b>{{ selectedWorklog.member }}</b></span><span>工时<b>{{ selectedWorklog.hours }}h</b></span><span>期号<b>{{ selectedWorklog.phase?.code || selectedPhase.code }} · {{ selectedWorklog.phase?.name || selectedPhase.name }}</b></span></div><section><header><strong>工作内容</strong><small>日报记录</small></header><p>{{ selectedWorklog.content }}</p></section></div></template></a-modal>
     <a-modal :visible="Boolean(selectedDailyReport)" title="日报详情" :footer="false" @cancel="selectedDailyReport = null"><template v-if="selectedDailyReport"><div class="daily-report-detail"><header><div><h2>{{ selectedDailyReport.name }}</h2><p>{{ selectedDailyReport.id }}</p></div><a-tag :color="dailyReportStatusColors[selectedDailyReport.status]">{{ selectedDailyReport.status }}</a-tag></header><div class="daily-report-detail-meta"><span>发送人<b>{{ selectedDailyReport.sender }}</b></span><span>发送时间<b>{{ selectedDailyReport.sentAt }}</b></span><span>关联期号<b>{{ phaseByKey(selectedDailyReport.phase)?.code }} · {{ phaseByKey(selectedDailyReport.phase)?.name }}</b></span><span>登记工时<b>{{ selectedDailyReport.hours }}h</b></span></div><section><header><strong>今日完成</strong><small>{{ selectedDailyReport.date }}</small></header><p>{{ selectedDailyReport.summary }}</p></section><section><header><strong>明日计划</strong></header><p>{{ selectedDailyReport.nextPlan }}</p></section><section><header><strong>风险与阻塞</strong></header><p>{{ selectedDailyReport.blockers }}</p></section></div></template></a-modal>
   </div>
 </template>
