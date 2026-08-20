@@ -128,6 +128,7 @@ const commentDraft = ref("");
 const replyingTo = ref(null);
 const subtaskDraft = ref("");
 const subtaskAssigneeDraft = ref("李项目");
+const taskDrawerSubtaskAdding = ref(false);
 const subtaskEditingId = ref(null);
 const subtaskEditDraft = ref({ title: "", assignee: "李项目" });
 const draggedSubtaskId = ref(null);
@@ -1314,13 +1315,24 @@ function addTaskDrawerSubtask() {
   if (!selectedTask.value) return;
   const title = subtaskDraft.value.trim();
   if (!title) { Message.warning("请输入子任务名称"); return; }
-  const subtask = { id: `subtask-${Date.now()}`, title, status: "未完成", assignee: subtaskAssigneeDraft.value || selectedTask.value.owner || "李项目" };
+  const subtask = { id: `subtask-${Date.now()}`, title, status: "未完成", assignee: subtaskAssigneeDraft.value || "李项目" };
   const subtasks = [...(selectedTask.value.subtasks || []), subtask];
   tasks.value = tasks.value.map(task => task.id === selectedTask.value.id ? { ...task, subtasks } : task);
   selectedTask.value = { ...selectedTask.value, subtasks };
   subtaskDraft.value = "";
-  subtaskAssigneeDraft.value = selectedTask.value.owner || "李项目";
+  subtaskAssigneeDraft.value = "李项目";
+  taskDrawerSubtaskAdding.value = false;
   appendTaskActivity(selectedTask.value.id, "新增子任务", title);
+}
+function startTaskDrawerSubtask() {
+  taskDrawerSubtaskAdding.value = true;
+  subtaskDraft.value = "";
+  subtaskAssigneeDraft.value = "李项目";
+}
+function cancelTaskDrawerSubtask() {
+  taskDrawerSubtaskAdding.value = false;
+  subtaskDraft.value = "";
+  subtaskAssigneeDraft.value = "李项目";
 }
 function removeTaskDrawerSubtask(subtask) {
   if (!selectedTask.value) return;
@@ -1334,8 +1346,7 @@ function onTaskRowClick(record) {
   selectedTask.value = record;
   commentDraft.value = "";
   replyingTo.value = null;
-  subtaskDraft.value = "";
-  subtaskAssigneeDraft.value = record.owner || "李项目";
+  cancelTaskDrawerSubtask();
   cancelSubtaskEdit();
   draggedSubtaskId.value = null;
   taskTitleEditing.value = false;
@@ -1759,7 +1770,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <main class="task-workspace">
         <section class="phase-header"><div class="phase-identity"><div class="phase-copy"><div class="phase-title-row"><h2>{{ selectedPhase.name }}</h2><a-tag :color="phaseStatusColor(selectedPhase.status)">{{ selectedPhase.status }}</a-tag></div><p>{{ selectedPhase.code }} · {{ selectedPhase.projectName }}</p><div class="phase-meta"><span><IconCalendar />{{ selectedPhase.dates }}</span><span><IconUserGroup />负责人：{{ selectedPhase.owner }}</span></div></div></div><a-tooltip content="期号设置"><a-button class="phase-settings-button" aria-label="期号设置" @click="openPhaseSettings"><IconSettings /></a-button></a-tooltip></section>
         <section class="task-control-bar"><a-radio-group class="task-view-switch" type="button" size="small" v-model="taskView"><a-radio value="list"><IconList />任务列表</a-radio><a-radio value="board"><IconApps />看板视图</a-radio></a-radio-group><div class="task-tools"><a-input v-model="taskKeyword" allow-clear placeholder="搜索任务名称"><template #prefix><IconSearch /></template></a-input><a-select v-model="statusFilter" :style="{ width: '118px' }"><a-option v-for="status in statusOptions" :key="status" :value="status">{{ status }}</a-option></a-select><a-date-picker v-model="dueDateFilter" class="task-due-filter" format="YYYY-MM-DD" value-format="YYYY-MM-DD" placeholder="截止时间" allow-clear /><a-button type="primary" @click="taskView === 'list' ? openTaskModal() : openLaneModal()"><IconPlus />{{ taskView === 'list' ? '新建任务' : '添加列' }}</a-button><a-dropdown trigger="click"><a-button class="workspace-more-button"><IconMore />更多</a-button><template #content><a-menu class="workspace-more-menu" @menu-item-click="openWorkspaceMore"><a-menu-item key="import"><IconImport />导入任务</a-menu-item><a-menu-item key="template"><IconFile />下载导入模板</a-menu-item><a-menu-item key="export"><IconExport />{{ taskView === 'list' ? '导出任务' : '导出看板' }}</a-menu-item></a-menu></template></a-dropdown></div><input ref="taskImportInput" class="task-import-input" type="file" accept=".csv,text/csv" @change="importTasks" /></section>
-        <section v-if="taskView === 'list'" class="task-list-section"><div class="table-frame"><a-table row-key="id" :columns="columns" :data="visibleTasks" :pagination="{ pageSize: 8, sizeCanChange: false }" :row-selection="rowSelection" @row-click="onTaskRowClick"><template #title="{ record }"><div class="task-title-cell"><strong>{{ record.title }}</strong><small>{{ record.id }} · {{ record.module }}</small></div></template><template #priority="{ record }"><a-tag :color="priorityColors[record.priority]">{{ record.priority }}</a-tag></template><template #owner="{ record }"><span class="owner-cell"><a-avatar :size="26">{{ record.owner.slice(0, 1) }}</a-avatar>{{ record.owner }}</span></template><template #status="{ record }"><a-tag :color="phaseStatusColor(record.status)">{{ record.status }}</a-tag></template><template #actions="{ record }"><a-button type="text" size="small" @click.stop="selectedTask = record"><IconMore /></a-button></template></a-table></div></section>
+        <section v-if="taskView === 'list'" class="task-list-section"><div class="table-frame"><a-table row-key="id" :columns="columns" :data="visibleTasks" :pagination="{ pageSize: 8, sizeCanChange: false }" :row-selection="rowSelection" @row-click="onTaskRowClick"><template #title="{ record }"><div class="task-title-cell"><strong>{{ record.title }}</strong><small>{{ record.id }} · {{ record.module }}</small></div></template><template #priority="{ record }"><a-tag :color="priorityColors[record.priority]">{{ record.priority }}</a-tag></template><template #owner="{ record }"><span class="owner-cell"><a-avatar :size="26">{{ record.owner.slice(0, 1) }}</a-avatar>{{ record.owner }}</span></template><template #status="{ record }"><a-tag :color="phaseStatusColor(record.status)">{{ record.status }}</a-tag></template><template #actions="{ record }"><a-button type="text" size="small" @click.stop="onTaskRowClick(record)"><IconMore /></a-button></template></a-table></div></section>
         <section v-else class="task-board-wrapper"><div class="task-board-section"><div v-for="lane in boardLanes" :key="lane.key" class="task-board-lane"><header draggable="true" @dragstart="startLaneDrag(lane, $event)" @dragover.prevent @drop="dropLane(lane, $event)"><span class="task-board-lane-title"><a-tag :color="lane.color">{{ lane.title }}</a-tag><b>{{ orderedBoardTasks(lane).length }}</b></span><span class="task-board-lane-actions"><a-tooltip content="编辑列"><a-button type="text" size="mini" @click.stop="openLaneModal(lane)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除列"><a-button type="text" size="mini" @click.stop="deleteLane(lane)"><IconDelete /></a-button></a-tooltip></span></header><div class="task-board-cards" @dragover.prevent @drop="dropTaskOnLane(lane, $event)"><button v-for="task in orderedBoardTasks(lane)" :key="task.id" class="task-board-card" draggable="true" @dragstart.stop="startTaskDrag(task, $event)" @dragover.prevent @drop="dropTaskBefore(task, lane, $event)" @click="onTaskRowClick(task)"><div class="task-board-card-top"><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag><span>{{ task.due }}</span></div><strong>{{ task.title }}</strong><small>{{ task.id }}</small><footer><span><a-avatar :size="22">{{ task.owner.slice(0, 1) }}</a-avatar>{{ task.owner }}</span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></footer></button><a-empty v-if="!orderedBoardTasks(lane).length" description="暂无任务" /></div></div></div></section>
       </main>
     </div>
@@ -1848,10 +1859,14 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
         </section>
         <section class="drawer-section task-subtasks-section">
           <header><strong>子任务</strong><span>{{ selectedTask.subtasks?.length || 0 }} 项</span></header>
-          <div class="subtask-add-row task-drawer-subtask-add">
-            <a-input v-model="subtaskDraft" placeholder="添加子任务名称" @keyup.enter="addTaskDrawerSubtask" />
-            <a-select v-model="subtaskAssigneeDraft" class="subtask-assignee-select" allow-search placeholder="执行人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select>
-            <a-button type="outline" aria-label="添加子任务" @click="addTaskDrawerSubtask"><IconPlus /></a-button>
+          <div v-if="!taskDrawerSubtaskAdding" class="task-drawer-subtask-entry">
+            <a-button class="task-drawer-subtask-entry-button" type="outline" @click="startTaskDrawerSubtask"><IconPlus />添加子任务</a-button>
+          </div>
+          <div v-else class="task-drawer-subtask-form">
+            <a-input v-model="subtaskDraft" autofocus placeholder="填写子任务名称" @keyup.enter="addTaskDrawerSubtask" />
+            <a-select v-model="subtaskAssigneeDraft" class="subtask-assignee-select" allow-search placeholder="负责人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select>
+            <a-button type="primary" aria-label="确认添加子任务" @click="addTaskDrawerSubtask"><IconCheckCircle /></a-button>
+            <a-button type="text" aria-label="取消添加子任务" @click="cancelTaskDrawerSubtask">取消</a-button>
           </div>
           <div v-if="selectedTask.subtasks?.length" class="task-subtask-list">
             <div v-for="subtask in selectedTask.subtasks" :key="subtask.id" class="task-subtask-row" :class="{ dragging: draggedSubtaskId === subtask.id, editing: subtaskEditingId === subtask.id }" @dragover.prevent @drop="dropSubtask(subtask, $event)">
@@ -1869,7 +1884,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
               </template>
             </div>
           </div>
-          <p v-else class="task-subtasks-empty">暂无子任务，可在上方直接添加。</p>
+          <p v-else class="task-subtasks-empty">暂无子任务，可点击上方按钮添加。</p>
         </section>
         <section class="drawer-section task-collaboration-section">
           <div class="task-collaboration-tabs"><button :class="{ active: taskCollaborationTab === 'comments' }" @click="taskCollaborationTab = 'comments'">评论与回复 <b>{{ selectedTaskComments.length }}</b></button><button :class="{ active: taskCollaborationTab === 'activities' }" @click="taskCollaborationTab = 'activities'">操作记录 <b>{{ selectedTaskActivities.length }}</b></button></div>
