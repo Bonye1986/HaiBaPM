@@ -14,13 +14,16 @@ button, input, textarea { letter-spacing: 0; }
 h1, h2, h3, p { margin: 0; }
 
 .app-shell { min-height: 100dvh; background: #f7f8fa; }
-.login-page { min-height: 100dvh; display: flex; flex-direction: column; overflow: auto; background: #eef2f7; color: #1d2129; }
-.login-header { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #dde3eb; background: #f9fbfd; padding: 0 28px; color: #6b7785; font-size: 12px; }
+.login-page { min-height: 100dvh; position: relative; isolation: isolate; display: flex; flex-direction: column; overflow: auto; background: #eef2f7; color: #1d2129; }
+.login-page::before, .login-page::after { position: absolute; z-index: -1; inset: 64px 0 0; pointer-events: none; content: ""; }
+.login-page::before { background-image: linear-gradient(rgba(91, 126, 170, .08) 1px, transparent 1px), linear-gradient(90deg, rgba(91, 126, 170, .08) 1px, transparent 1px); background-position: 0 0, 0 0; background-size: 44px 44px; opacity: .7; animation: login-grid-drift 26s linear infinite; }
+.login-page::after { background: linear-gradient(118deg, transparent 18%, rgba(255, 255, 255, .42) 42%, transparent 64%); background-size: 220% 100%; opacity: .55; animation: login-sheen 16s ease-in-out infinite; }
+.login-header { position: relative; z-index: 1; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #dde3eb; background: rgba(249, 251, 253, .94); padding: 0 28px; color: #6b7785; font-size: 12px; }
 .login-brand { display: inline-flex; align-items: center; gap: 9px; color: #1d2129; }
 .login-brand > svg { width: 34px; height: 34px; border-radius: 8px; background: rgb(var(--primary-6)); padding: 7px; color: #f9fbfd; box-shadow: 0 4px 10px rgba(22, 93, 255, .18); }
 .login-brand-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: contain; }
 .login-brand strong { font-size: 19px; }
-.login-panel { width: min(430px, calc(100% - 32px)); margin: auto; border: 1px solid #dce3ec; border-radius: 6px; background: #fdfefe; padding: 30px; box-shadow: 0 14px 34px rgba(29, 33, 41, .1); }
+.login-panel { position: relative; z-index: 1; width: min(430px, calc(100% - 32px)); margin: auto; border: 1px solid rgba(220, 227, 236, .92); border-radius: 6px; background: rgba(253, 254, 254, .94); padding: 30px; box-shadow: 0 14px 34px rgba(29, 33, 41, .1); }
 .login-panel-heading { display: flex; align-items: center; gap: 13px; margin-bottom: 26px; }
 .login-security-icon { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 6px; background: #e8f7ee; color: #27844b; font-size: 22px; }
 .login-panel-heading h1 { font-size: 22px; line-height: 1.25; }
@@ -43,6 +46,9 @@ h1, h2, h3, p { margin: 0; }
 .wecom-login .arco-icon { color: #2f7cf6; }
 .login-panel > footer { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 18px; border-top: 1px solid #edf0f4; padding-top: 15px; color: #86909c; font-size: 10px; }
 .login-panel > footer svg { color: #27844b; }
+@keyframes login-grid-drift { from { background-position: 0 0, 0 0; } to { background-position: 44px 44px, 44px 44px; } }
+@keyframes login-sheen { 0%, 100% { background-position: 120% 0; } 50% { background-position: -20% 0; } }
+@media (prefers-reduced-motion: reduce) { .login-page::before, .login-page::after { animation: none; } }
 .global-header {
   height: var(--header-height);
   display: grid;
