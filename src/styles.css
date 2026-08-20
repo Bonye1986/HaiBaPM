@@ -450,6 +450,19 @@ h1, h2, h3, p { margin: 0; }
 .profile-settings-section > header strong { color: #1d2129; font-size: 14px; }
 .profile-settings-section > header span { color: #86909c; font-size: 10px; }
 .profile-settings-section .arco-form-item { margin-bottom: 16px; }
+.system-settings-section { padding: 22px 0; border-bottom: 1px solid var(--line); }
+.system-settings-section:first-child { padding-top: 4px; }
+.system-settings-section:last-of-type { border-bottom: 0; }
+.system-settings-section > header { display: flex; align-items: baseline; gap: 9px; margin-bottom: 16px; }
+.system-settings-section > header strong { color: #1d2129; font-size: 14px; }
+.system-settings-section > header span { color: #86909c; font-size: 10px; }
+.system-settings-section .arco-form-item { margin-bottom: 16px; }
+.system-settings-switch { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid #f2f3f5; }
+.system-settings-switch + .system-settings-switch { border-top: 1px solid #f2f3f5; }
+.system-settings-switch > span { min-width: 0; }
+.system-settings-switch b, .system-settings-switch small { display: block; }
+.system-settings-switch b { color: #1d2129; font-size: 12px; font-weight: 500; }
+.system-settings-switch small { margin-top: 4px; color: #86909c; font-size: 10px; line-height: 1.45; }
 .profile-error { margin: -4px 0 0; border: 1px solid #f7c8c8; border-radius: 4px; background: #fff3f3; padding: 8px 10px; color: #c33b3b; font-size: 11px; }
 .profile-security-list { border-top: 1px solid #f2f3f5; }
 .profile-security-list > div { min-height: 66px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border-bottom: 1px solid #f2f3f5; }
@@ -1015,6 +1028,8 @@ h1, h2, h3, p { margin: 0; }
   .profile-avatar-section { grid-template-columns: auto minmax(0, 1fr); }
   .profile-avatar-actions { grid-column: 1 / -1; }
   .profile-settings-section .form-grid { grid-template-columns: 1fr; }
+  .system-settings-section > header { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .system-settings-switch { align-items: flex-start; padding: 12px 0; }
   .profile-security-list > div { grid-template-columns: 34px minmax(0, 1fr) auto; padding: 8px 0; }
   .profile-security-list > div > .arco-btn { grid-column: 2 / -1; justify-self: end; }
   .subtask-add-row { flex-wrap: wrap; }
