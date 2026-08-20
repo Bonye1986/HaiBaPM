@@ -18,6 +18,7 @@ h1, h2, h3, p { margin: 0; }
 .login-header { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #dde3eb; background: #f9fbfd; padding: 0 28px; color: #6b7785; font-size: 12px; }
 .login-brand { display: inline-flex; align-items: center; gap: 9px; color: #1d2129; }
 .login-brand > svg { width: 34px; height: 34px; border-radius: 8px; background: rgb(var(--primary-6)); padding: 7px; color: #f9fbfd; box-shadow: 0 4px 10px rgba(22, 93, 255, .18); }
+.login-brand-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: contain; }
 .login-brand strong { font-size: 19px; }
 .login-panel { width: min(430px, calc(100% - 32px)); margin: auto; border: 1px solid #dce3ec; border-radius: 6px; background: #fdfefe; padding: 30px; box-shadow: 0 14px 34px rgba(29, 33, 41, .1); }
 .login-panel-heading { display: flex; align-items: center; gap: 13px; margin-bottom: 26px; }
@@ -68,6 +69,7 @@ h1, h2, h3, p { margin: 0; }
   font-size: 20px;
   box-shadow: 0 4px 10px rgba(22, 93, 255, .2);
 }
+.brand-logo { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; }
 .brand strong { margin-left: 2px; font-size: 18px; }
 .global-nav.arco-menu-horizontal { width: 100%; height: 64px; border: 0; border-bottom: 1px solid var(--line); background: transparent; box-shadow: none; }
 .global-nav.arco-menu-horizontal .arco-menu-inner { height: 64px; justify-content: center; padding: 0; overflow: visible; }
@@ -463,6 +465,11 @@ h1, h2, h3, p { margin: 0; }
 .system-settings-section > header strong { color: #1d2129; font-size: 14px; }
 .system-settings-section > header span { color: #86909c; font-size: 10px; }
 .system-settings-section .arco-form-item { margin-bottom: 16px; }
+.system-logo-picker { display: flex; align-items: center; gap: 14px; }
+.system-logo-preview { width: 56px; height: 56px; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; border: 1px solid #dfe5ed; border-radius: 8px; background: #f7f9fb; color: rgb(var(--primary-6)); font-size: 28px; }
+.system-logo-preview img { width: 100%; height: 100%; object-fit: contain; }
+.system-logo-picker > div:last-child { min-width: 0; }
+.system-logo-picker small { display: block; margin-top: 7px; color: #86909c; font-size: 10px; }
 .system-settings-switch { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid #f2f3f5; }
 .system-settings-switch + .system-settings-switch { border-top: 1px solid #f2f3f5; }
 .system-settings-switch > span { min-width: 0; }
