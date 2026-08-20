@@ -225,12 +225,14 @@ h1, h2, h3, p { margin: 0; }
 .work-hours-panel h2 { color: #1d2129; font-size: 15px; }
 .work-hours-panel > header span { display: block; margin-top: 3px; color: #86909c; font-size: 11px; }
 .work-hours-table, .work-hours-detail-table { min-width: 680px; overflow-x: auto; }
-.work-hours-row { width: 100%; min-height: 64px; display: grid; grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.6fr) 120px 110px 130px; align-items: center; gap: 14px; border: 0; border-bottom: 1px solid #f2f3f5; background: #fff; padding: 9px 16px; color: #4e5969; text-align: left; font-size: 12px; }
+.work-hours-row { width: 100%; min-height: 64px; display: grid; grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.6fr) 120px minmax(180px, 1.2fr) 130px; align-items: center; gap: 14px; border: 0; border-bottom: 1px solid #f2f3f5; background: #fff; padding: 9px 16px; color: #4e5969; text-align: left; font-size: 12px; }
 .work-hours-row:not(.work-hours-row-heading):hover, .work-hours-detail-row:not(.work-hours-detail-row-heading):hover { background: #f7fbff; cursor: pointer; }
 .work-hours-row > span, .work-hours-detail-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-hours-row strong, .work-hours-row small, .work-hours-detail-row strong, .work-hours-detail-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-hours-row strong, .work-hours-detail-row strong { color: #1d2129; font-weight: 600; }
 .work-hours-row small, .work-hours-detail-row small { margin-top: 4px; color: #86909c; font-size: 10px; }
+.work-hours-member-breakdown { display: flex; flex-wrap: wrap; gap: 4px 10px; white-space: normal !important; }
+.work-hours-member-breakdown small { margin-top: 0; }
 .work-hours-row-heading, .work-hours-detail-row-heading { min-height: 42px; background: #f7f8fa; color: #4e5969; font-size: 11px; font-weight: 500; }
 .work-hours-table > .arco-empty, .work-hours-detail-table > .arco-empty { min-height: 150px; padding: 42px 16px; }
 .work-hours-detail-row { width: 100%; min-height: 58px; display: grid; grid-template-columns: 110px minmax(180px, 1.25fr) 90px 70px minmax(260px, 2fr); align-items: center; gap: 14px; border: 0; border-bottom: 1px solid #f2f3f5; background: #fff; padding: 8px 16px; color: #4e5969; text-align: left; font-size: 12px; }
