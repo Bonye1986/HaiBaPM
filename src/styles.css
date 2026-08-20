@@ -663,11 +663,12 @@ h1, h2, h3, p { margin: 0; }
 .task-drawer-meta span { min-width: 0; color: #86909c; font-size: 10px; }
 .task-drawer-meta b { overflow: hidden; margin-top: 5px; color: #4e5969; font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .task-drawer-id { display: block; margin-top: 3px; color: #86909c; font-size: 10px; font-weight: 400; }
-.task-drawer-meta-editable { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.task-meta-field { min-width: 0; }
-.task-meta-field > span { margin-bottom: 6px; }
+.task-drawer-meta-editable { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0 2px; padding: 0; border: 0; background: transparent; }
+.task-meta-field { min-width: 0; padding: 9px 10px 10px; border: 1px solid var(--line); border-radius: 4px; background: #f7f8fa; }
+.task-meta-field > span { margin-bottom: 6px; color: #86909c; font-size: 10px; font-weight: 500; }
 .task-meta-field .arco-select, .task-meta-field .arco-picker { width: 100%; }
 .task-meta-field .arco-select-view { min-height: 30px; background: white; }
+.task-meta-field .arco-picker { min-height: 30px; background: white; }
 .task-description-section .rich-text-editor { min-height: 170px; }
 .task-description-section .rich-text-content { min-height: 120px; }
 .task-descriptions, .phase-descriptions { margin: 10px 0 18px; padding: 14px; border: 1px solid var(--line); border-radius: 4px; background: #f7f8fa; }
