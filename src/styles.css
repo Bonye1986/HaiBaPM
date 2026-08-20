@@ -648,8 +648,11 @@ h1, h2, h3, p { margin: 0; }
 .rich-text-content:empty::before { content: attr(data-placeholder); color: #c9cdd4; pointer-events: none; }
 .rich-text-content p, .rich-text-content div { margin: 0 0 6px; }
 .rich-text-content ul, .rich-text-content ol { margin: 4px 0 8px; padding-left: 20px; }
-.rich-text-content img, .rich-text-display img { display: block; max-width: 100%; height: auto; margin: 8px 0; border-radius: 4px; }
+.rich-text-content img, .rich-text-display img { display: block; width: auto; max-width: min(100%, 360px); max-height: 220px; height: auto; margin: 8px 0; border-radius: 4px; object-fit: contain; cursor: zoom-in; }
 .rich-text-content audio, .rich-text-content video, .rich-text-display audio, .rich-text-display video { display: block; width: min(100%, 420px); max-width: 100%; margin: 8px 0; }
+.rich-text-display audio, .rich-text-display video { cursor: zoom-in; }
+.rich-text-content .rich-text-file, .rich-text-display .rich-text-file { display: inline-flex; align-items: center; max-width: min(100%, 420px); margin: 8px 0; border: 1px solid #c9dafa; border-radius: 4px; background: #f4f8ff; padding: 8px 10px; color: rgb(var(--primary-6)); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rich-text-display .rich-text-file:hover { background: #e8f3ff; }
 .rich-text-display { color: #4e5969; line-height: 1.7; word-break: break-word; }
 .rich-text-display p, .rich-text-display div { margin: 0 0 6px; }
 .rich-text-display ul, .rich-text-display ol { margin: 4px 0 8px; padding-left: 20px; }
@@ -748,6 +751,12 @@ h1, h2, h3, p { margin: 0; }
 .task-comment-item > .arco-btn { margin-top: 4px; padding: 0; color: rgb(var(--primary-6)); font-size: 11px; }
 .task-comment-inline-editor { margin-top: 9px; }
 .task-comment-edit-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.rich-media-preview { min-height: 260px; display: grid; place-items: center; background: #f7f8fa; padding: 14px; }
+.rich-media-preview img, .rich-media-preview video { max-width: 100%; max-height: 70vh; object-fit: contain; }
+.rich-media-preview audio { width: min(100%, 560px); }
+.rich-file-preview { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 220px; color: #4e5969; }
+.rich-file-preview > svg { color: rgb(var(--primary-6)); font-size: 44px; }
+.rich-file-preview strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-comment-editor { margin-top: 10px; }
 .replying-hint { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; color: #4e5969; font-size: 11px; }
 .replying-hint .arco-btn { padding: 0; }

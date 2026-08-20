@@ -2,7 +2,7 @@
 import { nextTick, onMounted, ref, watch } from "vue";
 import { Message } from "@arco-design/web-vue";
 import {
-  IconBold, IconImage, IconItalic, IconOrderedList, IconSound, IconUnorderedList, IconVideoCamera,
+  IconBold, IconFile, IconImage, IconItalic, IconOrderedList, IconSound, IconUnorderedList, IconVideoCamera,
 } from "@arco-design/web-vue/es/icon";
 
 const props = defineProps({ modelValue: { type: String, default: "" }, placeholder: { type: String, default: "" } });
@@ -12,6 +12,7 @@ const selectionRef = ref(null);
 const imageInputRef = ref(null);
 const audioInputRef = ref(null);
 const videoInputRef = ref(null);
+const fileInputRef = ref(null);
 const richTextTags = new Set(["B", "STRONG", "I", "EM", "U", "S", "H1", "H2", "H3", "H4", "H5", "H6", "UL", "OL", "LI", "P", "BR", "DIV", "SPAN", "IMG", "AUDIO", "VIDEO"]);
 const blockedTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "LINK", "META"]);
 const limits = { image: 8 * 1024 * 1024, audio: 20 * 1024 * 1024, video: 50 * 1024 * 1024 };
@@ -34,6 +35,17 @@ function sanitize(html) {
       child.setAttribute("src", source);
       if (child.tagName === "IMG") child.setAttribute("alt", alt.slice(0, 120));
       else { child.setAttribute("controls", ""); child.setAttribute("preload", "metadata"); }
+      return;
+    }
+    if (child.tagName === "A") {
+      const href = child.getAttribute("href") || "";
+      if (!/^data:[a-z0-9.+/-]+;base64,/i.test(href)) { child.remove(); return; }
+      const download = child.getAttribute("download") || "附件";
+      while (child.firstChild && child.firstChild.nodeType !== 3) child.removeChild(child.firstChild);
+      Array.from(child.attributes).forEach(attribute => child.removeAttribute(attribute.name));
+      child.setAttribute("href", href);
+      child.setAttribute("download", download.slice(0, 120));
+      child.className = "rich-text-file";
       return;
     }
     if (!richTextTags.has(child.tagName)) {
@@ -70,14 +82,15 @@ function restoreSelection() {
 function escapeAttribute(value) { return value.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character])); }
 function insertFile(file, type) {
   if (!file) return;
-  const label = type === "image" ? "图片" : type === "audio" ? "音频" : "视频";
-  if (!file.type.startsWith(`${type}/`)) { Message.error(`请选择有效的${label}文件`); return; }
-  if (file.size > limits[type]) { Message.error(`${label}大小不能超过 ${type === "image" ? "8MB" : type === "audio" ? "20MB" : "50MB"}`); return; }
+  const isAttachment = type === "file";
+  const label = type === "image" ? "图片" : type === "audio" ? "音频" : type === "video" ? "视频" : "附件";
+  if (!isAttachment && !file.type.startsWith(`${type}/`)) { Message.error(`请选择有效的${label}文件`); return; }
+  if (file.size > (limits[type] || 20 * 1024 * 1024)) { Message.error(`${label}大小不能超过 ${type === "image" ? "8MB" : type === "audio" ? "20MB" : type === "video" ? "50MB" : "20MB"}`); return; }
   const reader = new FileReader();
   reader.onload = () => {
     restoreSelection();
     const source = escapeAttribute(String(reader.result || ""));
-    const markup = type === "image" ? `<img src="${source}" alt="${escapeAttribute(file.name)}">` : `<${type} src="${source}" controls preload="metadata"></${type}>`;
+    const markup = type === "image" ? `<img src="${source}" alt="${escapeAttribute(file.name)}">` : isAttachment ? `<a class="rich-text-file" href="${source}" download="${escapeAttribute(file.name)}">${escapeAttribute(file.name)}</a>` : `<${type} src="${source}" controls preload="metadata"></${type}>`;
     document.execCommand("insertHTML", false, markup);
     syncContent();
   };
@@ -87,7 +100,7 @@ function insertFile(file, type) {
 function openPicker(event, type) {
   event.preventDefault();
   saveSelection();
-  ({ image: imageInputRef, audio: audioInputRef, video: videoInputRef }[type]).value?.click();
+  ({ image: imageInputRef, audio: audioInputRef, video: videoInputRef, file: fileInputRef }[type]).value?.click();
 }
 function handleFile(event, type) { insertFile(event.target.files?.[0], type); event.target.value = ""; }
 function handlePaste(event) {
@@ -111,10 +124,12 @@ onMounted(async () => { await nextTick(); if (editorRef.value) editorRef.value.i
       <a-button type="text" size="mini" aria-label="插入图片" title="插入图片" @mousedown="openPicker($event, 'image')"><IconImage /></a-button>
       <a-button type="text" size="mini" aria-label="插入音频" title="插入音频" @mousedown="openPicker($event, 'audio')"><IconSound /></a-button>
       <a-button type="text" size="mini" aria-label="插入视频" title="插入视频" @mousedown="openPicker($event, 'video')"><IconVideoCamera /></a-button>
+      <a-button type="text" size="mini" aria-label="插入附件" title="插入附件" @mousedown="openPicker($event, 'file')"><IconFile /></a-button>
     </div>
     <input ref="imageInputRef" class="rich-text-file-input" type="file" accept="image/*" @change="handleFile($event, 'image')" />
     <input ref="audioInputRef" class="rich-text-file-input" type="file" accept="audio/*" @change="handleFile($event, 'audio')" />
     <input ref="videoInputRef" class="rich-text-file-input" type="file" accept="video/*" @change="handleFile($event, 'video')" />
+    <input ref="fileInputRef" class="rich-text-file-input" type="file" @change="handleFile($event, 'file')" />
     <div ref="editorRef" class="rich-text-content" contenteditable="true" role="textbox" aria-multiline="true" :data-placeholder="placeholder" @input="syncContent" @paste="handlePaste" @blur="emit('blur')" />
   </div>
 </template>
