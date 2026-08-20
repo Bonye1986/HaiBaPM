@@ -10,7 +10,7 @@ import { dailyReportSeed, phaseByKey, priorityColors, projects, statusColors, ta
 import RichTextEditor from "./components/RichTextEditor.vue";
 
 const navItems = ["工作台", "项目", "任务", "日报", "工时", "团队", "统计"];
-const activeNav = ref("项目");
+const activeNav = ref("工作台");
 const authStorageKey = "haiba-pm-auth";
 const storedAuthState = sessionStorage.getItem(authStorageKey) || localStorage.getItem(authStorageKey);
 const isAuthenticated = ref(storedAuthState !== "logged-out");
@@ -517,6 +517,7 @@ async function handleLogin() {
     const storage = loginDraft.value.remember ? localStorage : sessionStorage;
     storage.setItem(authStorageKey, "authenticated");
     isAuthenticated.value = true;
+    activeNav.value = "工作台";
     loginDraft.value.password = "";
     Message.success("登录成功");
   } finally {
@@ -557,6 +558,7 @@ function handleLogout() {
       passwordModalVisible.value = false;
       helpVisible.value = false;
       isAuthenticated.value = false;
+      activeNav.value = "工作台";
       loginError.value = "";
       loginDraft.value.password = "";
       passwordError.value = "";
