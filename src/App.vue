@@ -501,6 +501,7 @@ function taskChecklistAction(task) {
   const executors = task.executors?.length ? task.executors : [task.owner];
   if (task.status === "未完成" && executors.includes(currentUser)) return "submit";
   if (task.status === "待确认" && task.confirmer === currentUser) return "confirm";
+  if (task.status === "已完成" && (task.confirmer === currentUser || isManagementRole.value)) return "reopen";
   return "";
 }
 const profileInitial = computed(() => accountProfile.value.nickname.trim().slice(0, 1) || "用");
@@ -1096,7 +1097,19 @@ function handleTaskChecklistChange(task) {
     updateTaskStatus(task.id, "待确认", "任务结果已提交，等待确认");
     return;
   }
-  if (action === "confirm") updateTaskStatus(task.id, "已完成", "确认通过，任务已完成");
+  if (action === "confirm") {
+    updateTaskStatus(task.id, "已完成", "确认通过，任务已完成");
+    return;
+  }
+  if (action === "reopen") {
+    Modal.confirm({
+      title: "重新打开任务",
+      content: `确定将“${task.title}”重新打开并改为未完成吗？`,
+      okText: "重新打开",
+      cancelText: "取消",
+      onOk: () => updateTaskStatus(task.id, "未完成", "任务已重新打开"),
+    });
+  }
 }
 function orderedBoardTasks(lane) {
   const order = new Map(boardOrder.value.map((id, index) => [id, index]));
