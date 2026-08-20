@@ -172,15 +172,14 @@ h1, h2, h3, p { margin: 0; }
 .daily-page-heading { max-width: 1440px; margin: 0 auto 14px; }
 .daily-page-heading h1 { margin-top: 5px; color: #1d2129; font-size: 24px; line-height: 1.2; }
 .daily-page-heading p { margin-top: 7px; color: #4e5969; font-size: 13px; }
-.daily-tabs { max-width: 1440px; display: flex; align-items: center; gap: 22px; margin: 0 auto 14px; border-bottom: 1px solid #e5e6eb; }
+.daily-tabs { max-width: 1440px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 auto 14px; border-bottom: 1px solid #e5e6eb; }
 .daily-tab-buttons { display: flex; align-items: center; gap: 22px; }
 .daily-tabs button { position: relative; min-height: 42px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 2px; color: #86909c; font-size: 13px; cursor: pointer; }
 .daily-tabs button.active { border-bottom-color: rgb(var(--primary-6)); color: rgb(var(--primary-6)); font-weight: 600; }
 .daily-tabs b { display: inline-grid; min-width: 18px; height: 18px; place-items: center; margin-left: 4px; border-radius: 9px; background: #f2f3f5; color: #86909c; font-size: 10px; font-weight: 500; }
 .daily-tabs button.active b { background: #e8f3ff; color: rgb(var(--primary-6)); }
-.daily-page-filters { max-width: 1440px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 auto 18px; }
-.daily-page-filters .arco-select { width: 128px; }
-.daily-page-filters .arco-picker { width: 260px; }
+.daily-tabs .arco-select { width: 128px; }
+.daily-tabs .arco-picker { width: 260px; }
 .daily-user-filter { width: 132px !important; }
 .daily-report-search { width: min(300px, 100%); margin-left: auto; }
 .daily-page-panel { max-width: 1440px; margin: 0 auto; border: 1px solid #e5e6eb; border-radius: 6px; background: #fff; overflow: hidden; }
@@ -1118,7 +1117,7 @@ h1, h2, h3, p { margin: 0; }
   .statistics-page { padding: 20px; }
   .statistics-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .daily-page { height: auto; min-height: calc(100dvh - var(--header-height)); padding: 20px; }
-  .daily-page-filters .arco-picker { width: 240px; }
+  .daily-tabs .arco-picker { width: 240px; }
 }
 
 @media (max-width: 980px) {
@@ -1198,11 +1197,9 @@ h1, h2, h3, p { margin: 0; }
   .statistics-risk-list { min-width: 520px; }
   .daily-page { padding: 16px 12px 24px; }
   .daily-page-heading { margin-bottom: 10px; }
-  .daily-tabs { gap: 18px; flex-wrap: wrap; }
+  .daily-tabs { align-items: stretch; flex-direction: column; gap: 8px; }
   .daily-tab-buttons { gap: 18px; }
-  .daily-tabs .daily-report-search { width: 100%; margin-left: 0; margin-bottom: 8px; }
-  .daily-page-filters { align-items: stretch; flex-direction: column; }
-  .daily-page-filters .arco-select, .daily-page-filters .arco-picker, .daily-report-search, .daily-user-filter { width: 100% !important; margin-left: 0; }
+  .daily-tabs .arco-select, .daily-tabs .arco-picker, .daily-report-search, .daily-user-filter { width: 100% !important; margin-left: 0; }
   .daily-report-table { min-width: 720px; }
   .daily-report-detail-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-layout { height: auto; display: flex; flex-direction: column; gap: 8px; overflow: visible; }
