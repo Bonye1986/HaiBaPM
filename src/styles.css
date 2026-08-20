@@ -257,6 +257,11 @@ h1, h2, h3, p { margin: 0; }
 .team-member-actions .arco-btn:hover { background: #f2f7ff; color: rgb(var(--primary-6)); }
 .team-member-actions .arco-btn[status="danger"] { color: #f53f3f; }
 .team-member-table > .arco-empty { min-height: 180px; padding: 48px 16px; }
+.team-member-binding-fields { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; margin-top: 4px; border-top: 1px solid #f2f3f5; border-bottom: 1px solid #f2f3f5; padding: 12px 0; }
+.team-member-binding-fields span { min-width: 0; }
+.team-member-binding-fields b, .team-member-binding-fields small { display: block; }
+.team-member-binding-fields b { color: #1d2129; font-size: 12px; font-weight: 500; }
+.team-member-binding-fields small { margin-top: 3px; color: #86909c; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-member-modal-note { display: flex; align-items: flex-start; gap: 6px; margin-top: 12px; color: #86909c; font-size: 11px; line-height: 1.6; }
 .team-member-modal-note .arco-icon { flex: 0 0 auto; margin-top: 2px; }
 .team-permission-modal > header { display: flex; align-items: center; gap: 10px; padding-bottom: 16px; border-bottom: 1px solid #f2f3f5; }
@@ -1030,6 +1035,7 @@ h1, h2, h3, p { margin: 0; }
   .profile-settings-section .form-grid { grid-template-columns: 1fr; }
   .system-settings-section > header { align-items: flex-start; flex-direction: column; gap: 4px; }
   .system-settings-switch { align-items: flex-start; padding: 12px 0; }
+  .team-member-binding-fields { grid-template-columns: minmax(0, 1fr) auto; }
   .profile-security-list > div { grid-template-columns: 34px minmax(0, 1fr) auto; padding: 8px 0; }
   .profile-security-list > div > .arco-btn { grid-column: 2 / -1; justify-self: end; }
   .subtask-add-row { flex-wrap: wrap; }
