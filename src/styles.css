@@ -253,6 +253,7 @@ h1, h2, h3, p { margin: 0; }
 .daily-task-entry-editor > header small { display: block; margin-top: 3px; color: #86909c; font-size: 11px; }
 .daily-task-entry { margin-top: 10px; border: 1px solid #e5e6eb; border-radius: 5px; background: #fff; padding: 12px; }
 .daily-task-entry-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: #4e5969; font-size: 12px; }
+.daily-report-modal-footer { display: flex; justify-content: flex-end; gap: 10px; }
 .daily-report-task-entry-detail { padding-bottom: 0 !important; }
 .daily-report-task-entry { border: 1px solid #e5e6eb; border-radius: 5px; background: #fff; padding: 11px 12px; }
 .daily-report-task-entry + .daily-report-task-entry { margin-top: 8px; }
