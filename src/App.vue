@@ -2,11 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { Message, Modal } from "@arco-design/web-vue";
 import {
-  IconArrowRise, IconCalendar, IconCheckCircle, IconClockCircle, IconClose, IconCopy, IconDown, IconExport, IconFile,
-  IconFolder, IconInfoCircle, IconLock, IconMenuFold, IconMenuUnfold, IconMore, IconNotification, IconWechat,
-  IconApps, IconDelete, IconDragDotVertical, IconEdit, IconEye, IconImport, IconList, IconMindMapping, IconPlus, IconPoweroff, IconQuestionCircle, IconRefresh, IconSafe, IconSearch, IconSettings, IconUp, IconUser, IconUserAdd, IconUserGroup,
+  IconArrowRise, IconCaretLeft, IconCaretRight, IconCheckCircle, IconClockCircle, IconClose, IconCopy, IconDown, IconExport, IconFile,
+  IconFilter, IconFolder, IconInfoCircle, IconLock, IconMenuFold, IconMenuUnfold, IconMessage, IconMobile, IconMore, IconNotification, IconWechat,
+  IconApps, IconArrowLeft, IconBarChart, IconDelete, IconDragDotVertical, IconEdit, IconEye, IconImport, IconLayout, IconList, IconMindMapping, IconPlus, IconPoweroff, IconQuestionCircle, IconRefresh, IconSafe, IconSearch, IconSettings, IconUp, IconUpload, IconUser, IconUserAdd, IconUserGroup,
 } from "@arco-design/web-vue/es/icon";
 import { dailyReportSeed, phaseByKey, priorityColors, projects, statusColors, taskSeed } from "./data.js";
+import OnlineFileEditor from "./components/OnlineFileEditor.vue";
 import RichTextEditor from "./components/RichTextEditor.vue";
 
 const navItems = ["工作台", "项目", "任务", "日报", "工时", "团队", "统计"];
@@ -17,7 +18,11 @@ const isAuthenticated = ref(storedAuthState !== "logged-out");
 const loginLoading = ref(false);
 const loginError = ref("");
 const socialLoginProvider = ref("");
-const loginDraft = ref({ account: "lixiangmu@haiba.example", password: "", remember: true });
+const loginMode = ref("internal");
+const loginCodeSending = ref(false);
+const loginCodeCountdown = ref(0);
+let loginCodeTimer = null;
+const loginDraft = ref({ account: "lixiangmu@haiba.example", password: "", phone: "", verificationCode: "", remember: true });
 const profileDrawerVisible = ref(false);
 const systemSettingsDrawerVisible = ref(false);
 const systemSettingsDraft = ref({
@@ -81,7 +86,6 @@ const taskStatusMap = { "未开始": "未完成", "进行中": "未完成", "延
 const selectedPhaseKey = ref("1500-01-01");
 const expandedKeys = ref(["1500", "1500-01", "1501", "1501-01", "1502", "1502-01"]);
 const selectedCustomerKey = ref("1500");
-const customerCollapsed = ref(false);
 const navigatorKeyword = ref("");
 const phaseStatus = ref("全部状态");
 const projectView = ref("tree");
@@ -89,10 +93,10 @@ const taskView = ref("list");
 const recentPhaseKeys = ref(["1500-01-01", "1500-01-02"]);
 const taskKeyword = ref("");
 const statusFilter = ref("全部状态");
-const sortBy = ref("优先级");
+const sortBy = ref("状态");
+const sortDirection = ref("asc");
 const dueDateFilter = ref("");
 const taskPageType = ref("全部");
-const taskPageCategory = ref("全部类型");
 const taskPageStatus = ref("全部状态");
 const taskPageDueDate = ref("");
 const taskPageKeyword = ref("");
@@ -101,19 +105,44 @@ const dailyReportStatus = ref("全部状态");
 const dailyReportDateRange = ref([]);
 const dailyReportUser = ref("全部成员");
 const dailyReportKeyword = ref("");
+const dailyDetailProject = ref("全部项目");
+const dailyDetailPhase = ref("全部期号");
+const dailyDetailSender = ref("全部发送人");
 const selectedDailyReport = ref(null);
+const projectManagerDailyTaskCategories = ["手续", "需求", "原型", "前端", "对接", "售后"];
+const developerDailyTaskCategories = ["开发", "优化", "修复"];
+function dailyTaskCategoriesForSender(sender) {
+  const member = teamDirectory.value.find(item => item.name === sender);
+  const role = member?.role || (sender === accountProfile.value.nickname ? accountProfile.value.position : "");
+  return role.includes("开发") ? developerDailyTaskCategories : projectManagerDailyTaskCategories;
+}
+function inferDailyTaskCategory(text, sender) {
+  const content = String(text || "");
+  const options = dailyTaskCategoriesForSender(sender);
+  if (options === developerDailyTaskCategories) {
+    if (content.includes("修复")) return "修复";
+    if (content.includes("优化")) return "优化";
+    return "开发";
+  }
+  if (/资料|验收|归档|部署|手续/.test(content)) return "手续";
+  if (/需求|范围|规则/.test(content)) return "需求";
+  if (/原型|交互|视觉/.test(content)) return "原型";
+  if (/前端|页面|响应式|Web/.test(content)) return "前端";
+  if (/售后|客户支持/.test(content)) return "售后";
+  return "对接";
+}
 function normalizeDailyReport(report) {
   const entries = Array.isArray(report.tasks) && report.tasks.length
     ? report.tasks
-    : [{ id: `${report.id}-task-1`, taskId: "", title: report.summary || "", phase: report.phase || "", hours: Number(report.hours || 0), summary: report.summary || "", blockers: report.blockers || "" }];
+    : [{ id: `${report.id}-task-1`, taskId: "", title: report.summary || "", phase: report.phase || "", hours: Number(report.hours || 0), summary: "", blockers: report.blockers || "" }];
   const tasks = entries.map((entry, index) => ({
     id: entry.id || `${report.id}-task-${index + 1}`,
     taskId: entry.taskId || "",
-    taskType: entry.taskType || (entry.phase ? "project" : "nonProject"),
+    category: entry.category || inferDailyTaskCategory(entry.title || entry.summary, report.sender),
     title: entry.title || entry.summary || "",
-    phase: entry.phase || "",
+    phase: entry.phase || report.phase || "",
     hours: Number(entry.hours || 0),
-    summary: entry.summary || entry.title || "",
+    summary: entry.summary || "",
     blockers: entry.blockers || "",
   }));
   return {
@@ -121,7 +150,7 @@ function normalizeDailyReport(report) {
     tasks,
     phase: report.phase || tasks.find(entry => entry.phase)?.phase || "",
     hours: tasks.reduce((total, entry) => total + entry.hours, 0),
-    summary: tasks.map(entry => entry.summary).filter(Boolean).join("\n"),
+    summary: tasks.map(entry => entry.title).filter(Boolean).join("\n"),
     blockers: tasks.map(entry => entry.blockers).filter(Boolean).join("\n"),
   };
 }
@@ -129,11 +158,11 @@ function reportHasPhase(report, phaseKeys) {
   const keys = phaseKeys instanceof Set ? phaseKeys : new Set(phaseKeys || []);
   return keys.has(report.phase) || (report.tasks || []).some(entry => keys.has(entry.phase));
 }
-const dailyReports = ref(dailyReportSeed.map(normalizeDailyReport));
 const dailyReportModalVisible = ref(false);
 const dailyReportEditingId = ref(null);
 const dailyReportDraft = ref({ name: "", date: "", tasks: [], nextPlan: "", status: "草稿" });
 const workHoursDateRange = ref([]);
+const workHoursProject = ref("全部项目");
 const workHoursMember = ref("全部成员");
 const workHoursKeyword = ref("");
 const statsProjectFilter = ref("全部项目");
@@ -148,6 +177,8 @@ const teamDirectory = ref([
   { id: "account-7", name: "周工", account: "zhou.gong@example.com", phone: "13900001240", role: "外包开发", type: "外部协作成员", status: "启用", joinedAt: "2026-07-04", permissions: ["工作台", "任务执行", "文件管理"] },
   { id: "account-8", name: "张客户", account: "customer@xinghe.example", phone: "13900001241", role: "客户联系人", type: "项目客户", status: "启用", joinedAt: "2026-07-08", permissions: ["工作台", "项目资料", "任务查看", "文件查看"] },
 ]);
+const dailyReports = ref(dailyReportSeed.map(normalizeDailyReport));
+const dailyReportTaskCategoryOptions = computed(() => dailyTaskCategoriesForSender(dailyReportDraft.value.sender || accountProfile.value.nickname));
 const teamKeyword = ref("");
 const teamTypeFilter = ref("全部类型");
 const teamMemberModalVisible = ref(false);
@@ -159,7 +190,6 @@ const teamPermissionsDraft = ref([]);
 const teamPermissionOptions = ["工作台", "项目资料", "任务管理", "任务执行", "文件管理", "日报管理", "工时查看", "团队管理", "系统设置"];
 const tasks = ref(taskSeed.map((task, index) => ({
   ...task,
-  taskType: task.phase ? "项目任务" : "其他任务",
   createdAt: task.createdAt || index,
   status: taskStatusMap[task.status] || task.status,
   confirmer: task.confirmer || task.owner,
@@ -216,6 +246,10 @@ const phaseFiles = ref({
   "1500-01-01": [
     { id: "file-1", name: "一期交付范围说明.pdf", type: "PDF", size: "1.8 MB", updated: "2026-08-16" },
     { id: "file-2", name: "测试报告终版.docx", type: "DOCX", size: "426 KB", updated: "2026-08-17" },
+    { id: "file-3", name: "接口联调用例.xlsx", type: "XLSX", size: "312 KB", updated: "2026-08-18" },
+    { id: "file-4", name: "首页原型-v3.png", type: "PNG", size: "2.1 MB", updated: "2026-08-19" },
+    { id: "file-5", name: "走查问题清单-0820.zip", type: "ZIP", size: "18.4 MB", updated: "2026-08-20" },
+    { id: "file-6", name: "需求变更记录-0821.pdf", type: "PDF", size: "204 KB", updated: "2026-08-21" },
   ],
 });
 const phaseMembers = ref({
@@ -239,11 +273,42 @@ const worklogDateRange = ref([]);
 const selectedWorkHoursPhase = ref(null);
 const phaseFileModalVisible = ref(false);
 const phaseFileInput = ref(null);
+const phaseUploadModalVisible = ref(false);
+const phaseUploadInput = ref(null);
 const phaseFileEditingId = ref(null);
 const phaseFileDraft = ref({ file: null, current: null });
+const onlineFileEditorVisible = ref(false);
+const onlineFileEditorPhaseKey = ref("");
+const onlineFileEditorFileId = ref(null);
+const onlineFileSavedSnapshot = ref("");
+const phaseOnlineFileDraft = ref({ type: "DOCX", name: "", content: "", cells: {}, slides: [], sheetRows: 20, sheetColumns: 10 });
+const phaseOnlineFileTypes = [
+  { type: "DOCX", label: "在线文档", extension: "docx", defaultName: "未命名文档" },
+  { type: "XLSX", label: "在线表格", extension: "xlsx", defaultName: "未命名表格" },
+  { type: "PPTX", label: "在线演示文稿", extension: "pptx", defaultName: "未命名演示文稿" },
+];
+const phaseFileAllowedExtensions = new Set(["doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf", "csv", "txt", "png", "jpg", "jpeg", "zip", "rar"]);
+const phaseFileAccept = ".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.csv,.txt,.png,.jpg,.jpeg,.zip,.rar";
+const onlineFileEditorPhase = computed(() => {
+  const base = phaseByKey(onlineFileEditorPhaseKey.value) || selectedPhase.value;
+  return { ...base, ...(phaseOverrides.value[base.key] || {}) };
+});
 const phaseFilePreviewVisible = ref(false);
+const onlineFilePreviewVisible = ref(false);
 const phaseFilePreview = ref(null);
 const phaseFilePreviewUrl = ref("");
+const onlineDocumentPreviewHtml = computed(() => phaseFilePreview.value?.online && phaseFilePreview.value.type === "DOCX" ? (phaseFilePreview.value.content || "<p>暂无内容</p>") : "");
+const onlineSheetPreviewColumns = computed(() => Array.from({ length: Math.max(1, Number(phaseFilePreview.value?.sheetColumns || 10)) }, (_, index) => String.fromCharCode(65 + index)));
+const onlineSheetPreviewRows = computed(() => {
+  const file = phaseFilePreview.value;
+  if (!file?.online || file.type !== "XLSX") return [];
+  return Array.from({ length: Math.max(1, Number(file.sheetRows || 20)) }, (_, rowIndex) => ({
+    number: rowIndex + 1,
+    cells: onlineSheetPreviewColumns.value.map(column => file.cells?.[`${column}${rowIndex + 1}`] || ""),
+  }));
+});
+const phaseFileKeyword = ref("");
+const phaseFileTypeFilter = ref("全部类型");
 const mediaPreviewVisible = ref(false);
 const mediaPreview = ref(null);
 const phaseMemberModalVisible = ref(false);
@@ -257,7 +322,7 @@ const projectPublicInfo = ref({
 });
 const projectInfoModalVisible = ref(false);
 const projectInfoDraft = ref("");
-const emptyDraft = () => ({ taskType: "项目任务", phase: "", title: "", module: "开发", status: "未完成", confirmer: "李项目", executors: ["李项目"], priority: "P1", due: "2026-08-31", description: "", subtasks: [] });
+const emptyDraft = () => ({ phase: "", title: "", module: "开发", status: "未完成", confirmer: "李项目", executors: ["李项目"], priority: "P1", due: "2026-08-31", description: "", subtasks: [] });
 const draft = ref(emptyDraft());
 
 const selectedPhase = computed(() => {
@@ -267,17 +332,18 @@ const selectedPhase = computed(() => {
 });
 const selectedCustomer = computed(() => { projectRevision.value; return projects.find(customer => customer.key === selectedCustomerKey.value) || null; });
 const normalizedKeyword = computed(() => navigatorKeyword.value.trim());
+const compareCodeDesc = (a, b) => String(b.code).localeCompare(String(a.code), "zh-CN", { numeric: true });
 const visibleCustomers = computed(() => projects.filter(customer => {
   projectRevision.value;
   const keyword = normalizedKeyword.value;
   return !keyword || `${customer.code}${customer.name}`.includes(keyword) || customer.projects.some(project => `${project.code}${project.name}`.includes(keyword) || project.phases.some(phase => `${phase.code}${phase.name}`.includes(keyword)));
-}));
+}).sort(compareCodeDesc));
 const filteredProjects = computed(() => { projectRevision.value; return projects.map(customer => {
   if (selectedCustomerKey.value && customer.key !== selectedCustomerKey.value && !normalizedKeyword.value) return null;
   const customerMatch = `${customer.code}${customer.name}`.includes(normalizedKeyword.value);
   const projectRows = customer.projects.map(project => {
     const projectMatch = `${project.code}${project.name}`.includes(normalizedKeyword.value);
-    const phases = project.phases.map(phase => ({ ...phase, ...(phaseOverrides.value[phase.key] || {}) })).filter(phase => (phaseStatus.value === "全部状态" || phase.status === phaseStatus.value) && (!normalizedKeyword.value || customerMatch || projectMatch || `${phase.code}${phase.name}`.includes(normalizedKeyword.value)));
+    const phases = project.phases.map(phase => ({ ...phase, ...(phaseOverrides.value[phase.key] || {}) })).filter(phase => (phaseStatus.value === "全部状态" || phase.status === phaseStatus.value) && (!normalizedKeyword.value || customerMatch || projectMatch || `${phase.code}${phase.name}`.includes(normalizedKeyword.value))).sort(compareCodeDesc);
     return phases.length || (!normalizedKeyword.value && phaseStatus.value === "全部状态") ? { ...project, phases } : null;
   }).filter(Boolean);
   return projectRows.length ? { ...customer, projects: projectRows } : null;
@@ -323,7 +389,34 @@ const phaseListGroups = computed(() => {
   });
   return [...groups.values()];
 });
-const isManagementRole = computed(() => /管理员|管理层|总经理|副总|总监|CEO|项目经理|部门经理/.test(accountProfile.value.position || ""));
+const accountRole = computed(() => {
+  const position = accountProfile.value.position || "";
+  const memberType = currentAccountMember.value?.type || "";
+  if (/管理员|管理层|总经理|副总|总监|CEO|部门经理/.test(position)) return "management";
+  if (/项目经理|产品经理|交付顾问/.test(position)) return "project-manager";
+  if (/兼职|外包|客户|协作/.test(position) || ["外部协作成员", "外包成员", "项目客户"].includes(memberType)) return "external";
+  return "developer";
+});
+const isManagementRole = computed(() => accountRole.value === "management");
+const isProjectManagerRole = computed(() => accountRole.value === "project-manager");
+const isExternalRole = computed(() => accountRole.value === "external");
+const isWorkspaceAdminRole = computed(() => isManagementRole.value || isProjectManagerRole.value);
+const dashboardRoleLabel = computed(() => ({ management: "管理视角", "project-manager": "项目经理视角", developer: "开发人员视角", external: "外部协作视角" }[accountRole.value]));
+const dashboardRoleDescription = computed(() => ({
+  management: "查看全局项目盘面、团队负荷与交付风险。",
+  "project-manager": "聚焦今日待办、待确认事项和我负责的项目期号。",
+  developer: "聚焦分配给我的任务、截止时间和日报工时。",
+  external: "只显示分配给自己的任务、截止提醒和工时记录。",
+}[accountRole.value]));
+const isRolePersonalView = computed(() => !isManagementRole.value);
+const dashboardPendingTasks = computed(() => dashboardTaskRows.value.filter(task => task.status === "待确认" && task.confirmer === accountProfile.value.nickname));
+const dashboardRecordStats = computed(() => {
+  const currentUser = accountProfile.value.nickname;
+  const ownReports = dailyReports.value.filter(report => report.sender === currentUser);
+  const ownHours = ownReports.reduce((sum, report) => sum + Number(report.hours || 0), 0);
+  const latest = ownReports.sort((a, b) => b.sentAt.localeCompare(a.sentAt))[0];
+  return { submitted: latest?.status === "已发送", latest: latest?.sentAt || "尚未提交", hours: ownHours };
+});
 const currentAccountMember = computed(() => teamDirectory.value.find(member => member.account === accountProfile.value.account || member.name === accountProfile.value.nickname));
 const currentPermissions = computed(() => currentAccountMember.value?.permissions || ["工作台"]);
 const navigationPermissions = {
@@ -335,7 +428,7 @@ const navigationPermissions = {
   "统计": ["统计查看"],
 };
 function hasPermission(permission) {
-  return isManagementRole.value || currentPermissions.value.includes(permission);
+  return isWorkspaceAdminRole.value || currentPermissions.value.includes(permission);
 }
 function canAccessNavigation(item) {
   if (item === "工作台") return true;
@@ -454,6 +547,18 @@ const statsMemberRows = computed(() => {
   return [...rows.values()].map(row => ({ ...row, completionRate: row.tasks ? Math.round(row.completed / row.tasks * 100) : 0 })).sort((a, b) => b.tasks - a.tasks || b.hours - a.hours || a.name.localeCompare(b.name, "zh-CN"));
 });
 const statsReportSummary = computed(() => { const phaseKeys = new Set(statsFilteredPhases.value.map(phase => phase.key)); return ["已发送", "待确认", "已退回", "草稿"].map(status => ({ status, count: dailyReports.value.filter(report => reportHasPhase(report, phaseKeys) && report.status === status).length })); });
+const dashboardReportSeries = computed(() => {
+  const today = new Date(`${dashboardDate.value}T00:00:00`);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - 6 + index);
+    const key = date.toISOString().slice(0, 10);
+    const sent = dailyReports.value.filter(report => report.sentAt?.slice(0, 10) === key && report.status === "已发送").length;
+    const pending = dailyReports.value.filter(report => report.sentAt?.slice(0, 10) === key && report.status !== "已发送").length;
+    const total = sent + pending;
+    return { label: key.slice(5), sent, pending, total, height: Math.max(12, Math.min(100, total * 20)) };
+  });
+});
 const taskPageRows = computed(() => {
   const keyword = taskPageKeyword.value.trim();
   const currentUser = accountProfile.value.nickname;
@@ -463,23 +568,24 @@ const taskPageRows = computed(() => {
     const creator = task.createdBy || task.owner;
     const related = isManagementRole.value || creator === currentUser || task.owner === currentUser || task.confirmer === currentUser || executors.includes(currentUser);
     const typeMatch = taskPageType.value === "全部" || (taskPageType.value === "我发起的" && creator === currentUser) || (taskPageType.value === "我执行的" && executors.includes(currentUser)) || (taskPageType.value === "我确认的" && task.confirmer === currentUser);
-    const category = task.taskType || (task.phase ? "项目任务" : "其他任务");
-    const categoryMatch = taskPageCategory.value === "全部类型" || category === taskPageCategory.value;
     const statusMatch = taskPageStatus.value === "全部状态" || task.status === taskPageStatus.value;
     const dateMatch = !taskPageDueDate.value || task.due === taskPageDueDate.value;
     const keywordMatch = !keyword || `${task.title}${task.id}${phase?.code || ""}${phase?.name || ""}${phase?.projectName || ""}`.includes(keyword);
-    return related && typeMatch && categoryMatch && statusMatch && dateMatch && keywordMatch;
+    return related && typeMatch && statusMatch && dateMatch && keywordMatch;
   }).sort((a, b) => ({ P0: 0, P1: 1, P2: 2 }[a.priority] ?? 3) - ({ P0: 0, P1: 1, P2: 2 }[b.priority] ?? 3) || (a.createdAt ?? 0) - (b.createdAt ?? 0));
 });
 const dailyReportStatusColors = { "已发送": "green", "待确认": "orange", "已退回": "red", "草稿": "gray" };
+const visibleDailyReports = computed(() => {
+  const currentUser = accountProfile.value.nickname;
+  const visiblePhaseKeys = new Set(dashboardPhaseRows.value.map(phase => phase.key));
+  return dailyReports.value.filter(report => isManagementRole.value || report.sender === currentUser || reportHasPhase(report, visiblePhaseKeys));
+});
 const dailyReportRows = computed(() => {
   const keyword = dailyReportKeyword.value.trim();
   const [startDate, endDate] = dailyReportDateRange.value || [];
   const currentUser = accountProfile.value.nickname;
-  const visiblePhaseKeys = new Set(dashboardPhaseRows.value.map(phase => phase.key));
-  return dailyReports.value.filter(report => {
-    const related = isManagementRole.value || report.sender === currentUser || reportHasPhase(report, visiblePhaseKeys);
-    const tabMatch = dailyReportTab.value === "mine" ? report.sender === currentUser : related;
+  return visibleDailyReports.value.filter(report => {
+    const tabMatch = dailyReportTab.value === "mine" ? report.sender === currentUser : true;
     const statusMatch = dailyReportTab.value === "mine" || dailyReportStatus.value === "全部状态" || report.status === dailyReportStatus.value;
     const dateMatch = dailyReportTab.value === "mine" || ((!startDate || report.date >= startDate) && (!endDate || report.date <= endDate));
     const userMatch = dailyReportTab.value === "mine" || dailyReportUser.value === "全部成员" || report.sender === dailyReportUser.value;
@@ -487,8 +593,48 @@ const dailyReportRows = computed(() => {
     return tabMatch && statusMatch && dateMatch && userMatch && keywordMatch;
 }).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
 });
+const dailyDetailBaseRows = computed(() => {
+  const visiblePhases = new Map(dashboardPhaseRows.value.map(phase => [phase.key, phase]));
+  return visibleDailyReports.value.flatMap(report => (report.tasks || []).flatMap(entry => {
+      const phase = visiblePhases.get(entry.phase);
+      if (!phase) return [];
+      return [{
+        id: `${report.id}-${entry.id}`,
+        report,
+        entry,
+        date: report.date,
+        projectKey: phase.projectKey,
+        projectLabel: `${phase.projectKey} · ${phase.projectName}`,
+        phaseKey: phase.key,
+        phaseLabel: `${phase.code} · ${phase.name}`,
+        sender: report.sender,
+        sentAt: report.sentAt,
+        hours: Number(entry.hours || 0),
+      }];
+    })).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+});
+const dailyDetailProjectOptions = computed(() => {
+  const options = new Map();
+  dailyDetailBaseRows.value.forEach(row => options.set(row.projectKey, row.projectLabel));
+  return [...options.entries()].map(([value, label]) => ({ value, label }));
+});
+const dailyDetailPhaseOptions = computed(() => {
+  const options = new Map();
+  dailyDetailBaseRows.value.forEach(row => {
+    if (dailyDetailProject.value === "全部项目" || row.projectKey === dailyDetailProject.value) options.set(row.phaseKey, row.phaseLabel);
+  });
+  return [...options.entries()].map(([value, label]) => ({ value, label }));
+});
+const dailyDetailSenderOptions = computed(() => [...new Set(dailyDetailBaseRows.value.map(row => row.sender))]);
+const dailyDetailRows = computed(() => dailyDetailBaseRows.value.filter(row => (
+  (dailyDetailProject.value === "全部项目" || row.projectKey === dailyDetailProject.value)
+  && (dailyDetailPhase.value === "全部期号" || row.phaseKey === dailyDetailPhase.value)
+  && (dailyDetailSender.value === "全部发送人" || row.sender === dailyDetailSender.value)
+)));
+const dailyDetailTotalHours = computed(() => dailyDetailRows.value.reduce((sum, row) => sum + row.hours, 0));
+watch(dailyDetailProject, () => { dailyDetailPhase.value = "全部期号"; });
 const workHoursMembers = computed(() => {
-  const visiblePhaseKeys = new Set(dashboardPhaseRows.value.map(phase => phase.key));
+  const visiblePhaseKeys = new Set(dashboardPhaseRows.value.filter(phase => workHoursProject.value === "全部项目" || phase.projectKey === workHoursProject.value).map(phase => phase.key));
   const members = new Set();
   dailyReports.value.forEach(report => {
     if ((report.tasks || []).some(entry => visiblePhaseKeys.has(entry.phase))) members.add(report.sender);
@@ -498,11 +644,11 @@ const workHoursMembers = computed(() => {
 const workHoursFilteredLogs = computed(() => {
   const keyword = workHoursKeyword.value.trim();
   const [startDate, endDate] = workHoursDateRange.value || [];
-  const visiblePhaseKeys = new Set(dashboardPhaseRows.value.map(phase => phase.key));
+  const visiblePhases = new Map(dashboardPhaseRows.value.map(phase => [phase.key, phase]));
   return dailyReports.value.flatMap(report => (report.tasks || []).flatMap(entry => {
     const phaseKey = entry.phase;
-    if (!visiblePhaseKeys.has(phaseKey)) return [];
-    const phase = dashboardPhaseRows.value.find(item => item.key === phaseKey) || phaseByKey(phaseKey);
+    const phase = visiblePhases.get(phaseKey);
+    if (!phase || (workHoursProject.value !== "全部项目" && phase.projectKey !== workHoursProject.value)) return [];
     const phaseText = `${phase?.code || ""}${phase?.name || ""}${phase?.projectCode || ""}${phase?.projectName || ""}`;
     if (keyword && !phaseText.includes(keyword)) return [];
     if (workHoursMember.value !== "全部成员" && report.sender !== workHoursMember.value) return [];
@@ -512,7 +658,7 @@ const workHoursFilteredLogs = computed(() => {
       date: report.date,
       member: report.sender,
       hours: Number(entry.hours || 0),
-      content: entry.summary || entry.title,
+      content: entry.title,
       phaseKey,
       phase,
       report,
@@ -521,7 +667,10 @@ const workHoursFilteredLogs = computed(() => {
 });
 const workHoursPhaseRows = computed(() => {
   const keyword = workHoursKeyword.value.trim();
-  return dashboardPhaseRows.value.filter(phase => !keyword || `${phase.code}${phase.name}${phase.projectCode}${phase.projectName}`.includes(keyword)).map(phase => {
+  return dashboardPhaseRows.value.filter(phase => (
+    (workHoursProject.value === "全部项目" || phase.projectKey === workHoursProject.value)
+    && (!keyword || `${phase.code}${phase.name}${phase.projectCode}${phase.projectName}`.includes(keyword))
+  )).map(phase => {
     const logs = workHoursFilteredLogs.value.filter(log => log.phaseKey === phase.key);
     const latest = logs.reduce((current, log) => (!current || log.date > current ? log.date : current), "");
     const memberHours = Object.values(logs.reduce((members, log) => {
@@ -549,6 +698,7 @@ const workHoursStats = computed(() => {
   const members = new Set(workHoursFilteredLogs.value.map(log => log.member));
   return { phases: workHoursPhaseRows.value.length, totalHours, members: members.size, average: members.size ? Math.round(totalHours / members.size * 10) / 10 : 0 };
 });
+watch(workHoursProject, () => { workHoursMember.value = "全部成员"; });
 const filteredTeamMembers = computed(() => {
   const keyword = teamKeyword.value.trim().toLowerCase();
   return teamDirectory.value.filter(member => (
@@ -585,14 +735,69 @@ const filteredWorklogs = computed(() => {
 });
 const worklogMemberSummary = computed(() => teamMembers.map(member => ({ member, hours: filteredWorklogs.value.filter(log => log.member === member).reduce((sum, log) => sum + log.hours, 0) })).filter(item => item.hours > 0));
 const currentPhaseFiles = computed(() => phaseFiles.value[selectedPhaseKey.value] || []);
+const fileViewMode = ref("brief");
+const phaseFileSortBy = ref("更新时间");
+const phaseFileSortDirection = ref("desc");
+function toggleFileView() {
+  fileViewMode.value = fileViewMode.value === "brief" ? "full" : "brief";
+}
+function togglePhaseFileSort(key) {
+  if (phaseFileSortBy.value === key) phaseFileSortDirection.value = phaseFileSortDirection.value === "asc" ? "desc" : "asc";
+  else {
+    phaseFileSortBy.value = key;
+    phaseFileSortDirection.value = "asc";
+  }
+}
+function comparePhaseFiles(a, b) {
+  let result = 0;
+  if (phaseFileSortBy.value === "文件名") result = String(a.name || "").localeCompare(String(b.name || ""), "zh-CN", { numeric: true });
+  if (phaseFileSortBy.value === "文件类型") result = (a.online ? "在线文件" : "上传文件").localeCompare(b.online ? "在线文件" : "上传文件", "zh-CN");
+  if (phaseFileSortBy.value === "更新人") result = String(a.updatedBy || selectedPhase.value.owner || "").localeCompare(String(b.updatedBy || selectedPhase.value.owner || ""), "zh-CN");
+  if (phaseFileSortBy.value === "更新时间") result = String(a.updated || "").localeCompare(String(b.updated || ""));
+  return result * (phaseFileSortDirection.value === "asc" ? 1 : -1)
+    || String(b.updated || "").localeCompare(String(a.updated || ""))
+    || String(a.name || "").localeCompare(String(b.name || ""), "zh-CN", { numeric: true });
+}
+const briefPhaseFiles = computed(() => visiblePhaseFiles.value.slice(0, 3));
+const phaseFileTypeOptions = computed(() => ["全部类型", ...new Set(currentPhaseFiles.value.map(file => file.type).filter(Boolean))]);
+const visiblePhaseFiles = computed(() => currentPhaseFiles.value.filter(file => {
+  const keyword = phaseFileKeyword.value.trim().toLowerCase();
+  const matchesKeyword = !keyword || `${file.name} ${file.type}`.toLowerCase().includes(keyword);
+  const matchesType = phaseFileTypeFilter.value === "全部类型" || file.type === phaseFileTypeFilter.value;
+  return matchesKeyword && matchesType;
+}).sort(comparePhaseFiles));
 const currentPhaseMembers = computed(() => phaseMembers.value[selectedPhaseKey.value] || []);
 const selectedTaskComments = computed(() => selectedTask.value ? (taskComments.value[selectedTask.value.id] || []) : []);
 const selectedTaskActivities = computed(() => selectedTask.value ? (taskActivities.value[selectedTask.value.id] || []) : []);
-const visibleTasks = computed(() => phaseTasks.value.filter(task => (!taskKeyword.value || `${task.id}${task.title}${task.module}${task.owner}`.includes(taskKeyword.value)) && (statusFilter.value === "全部状态" || task.status === statusFilter.value) && (!dueDateFilter.value || task.due === dueDateFilter.value)).sort((a, b) => {
-  if (sortBy.value === "优先级") return ({ P0: 0, P1: 1, P2: 2 }[a.priority] ?? 3) - ({ P0: 0, P1: 1, P2: 2 }[b.priority] ?? 3) || (a.createdAt ?? 0) - (b.createdAt ?? 0);
-  if (sortBy.value === "任务名称") return a.title.localeCompare(b.title, "zh-CN");
-  return a.due.localeCompare(b.due);
-}));
+const taskPriorityOrder = { P0: 0, P1: 1, P2: 2 };
+const taskStatusOrder = { "待确认": 0, "未完成": 1, "已完成": 2 };
+function toggleTaskSort(key) {
+  if (sortBy.value === key) sortDirection.value = sortDirection.value === "asc" ? "desc" : "asc";
+  else {
+    sortBy.value = key;
+    sortDirection.value = "asc";
+  }
+  taskPage.value = 1;
+}
+function taskExecutorNames(task) {
+  return task.executors?.length ? task.executors : [task.owner].filter(Boolean);
+}
+function taskExecutorLabel(task) {
+  return taskExecutorNames(task).join("、");
+}
+function compareTasks(a, b) {
+  let result = 0;
+  if (sortBy.value === "任务名称") result = a.title.localeCompare(b.title, "zh-CN");
+  if (sortBy.value === "优先级") result = (taskPriorityOrder[a.priority] ?? 3) - (taskPriorityOrder[b.priority] ?? 3);
+  if (sortBy.value === "执行人") result = (taskExecutorNames(a)[0] || "").localeCompare(taskExecutorNames(b)[0] || "", "zh-CN");
+  if (sortBy.value === "确认人") result = (a.confirmer || a.owner || "").localeCompare(b.confirmer || b.owner || "", "zh-CN");
+  if (sortBy.value === "状态") result = (taskStatusOrder[a.status] ?? 3) - (taskStatusOrder[b.status] ?? 3);
+  if (sortBy.value === "截止时间") result = a.due.localeCompare(b.due);
+  return result * (sortDirection.value === "asc" ? 1 : -1)
+    || a.due.localeCompare(b.due)
+    || a.title.localeCompare(b.title, "zh-CN");
+}
+const visibleTasks = computed(() => phaseTasks.value.filter(task => (!taskKeyword.value || `${task.id}${task.title}${task.module}${task.owner}`.includes(taskKeyword.value)) && (statusFilter.value === "全部状态" || task.status === statusFilter.value) && (!dueDateFilter.value || task.due === dueDateFilter.value)).sort(compareTasks));
 const laneColorOptions = [
   { value: "gray", label: "灰色" }, { value: "arcoblue", label: "蓝色" },
   { value: "orange", label: "橙色" }, { value: "red", label: "红色" }, { value: "green", label: "绿色" },
@@ -633,15 +838,22 @@ function openTaskFromRow(task) {
 }
 function canEditTask(task) {
   const currentUser = accountProfile.value.nickname;
-  return canManageTasks.value && (isManagementRole.value || task.createdBy === currentUser || task.owner === currentUser || (task.executors || []).includes(currentUser));
+  const phaseOwner = phaseByKey(task.phase)?.owner;
+  return canManageTasks.value && (isManagementRole.value || task.createdBy === currentUser || task.owner === currentUser || (task.executors || []).includes(currentUser) || phaseOwner === currentUser);
 }
 function canDeleteTask(task) {
   const currentUser = accountProfile.value.nickname;
-  return canManageTasks.value && (isManagementRole.value || (task.createdBy || task.owner) === currentUser);
+  const phaseOwner = phaseByKey(task.phase)?.owner;
+  return canManageTasks.value && (isManagementRole.value || (task.createdBy || task.owner) === currentUser || phaseOwner === currentUser);
 }
 function editTaskFromList(task) {
   if (!canEditTask(task)) { Message.warning("当前账号没有编辑该任务的权限"); return; }
   openTaskFromRow(task);
+}
+function handleTaskActionMenu(task, action) {
+  if (action === "confirm") handleTaskChecklistChange(task);
+  if (action === "reject") rejectTaskConfirm(task);
+  if (action === "delete") deleteTaskFromList(task);
 }
 function deleteTaskFromList(task) {
   if (!canDeleteTask(task)) { Message.warning("当前账号没有删除该任务的权限"); return; }
@@ -680,7 +892,51 @@ const columns = [
 
 watch(selectedPhaseKey, key => {
   recentPhaseKeys.value = [key, ...recentPhaseKeys.value.filter(item => item !== key)].slice(0, 2);
+  phaseFileKeyword.value = "";
+  phaseFileTypeFilter.value = "全部类型";
+  fileViewMode.value = "brief";
 });
+
+const taskPage = ref(1);
+const taskPageSize = ref(8);
+const paMenuOpen = ref('');
+const taskPageCount = computed(() => Math.max(1, Math.ceil(visibleTasks.value.length / taskPageSize.value)));
+const pagedTasks = computed(() => visibleTasks.value.slice((taskPage.value - 1) * taskPageSize.value, taskPage.value * taskPageSize.value));
+watch([taskKeyword, statusFilter, dueDateFilter], () => { taskPage.value = 1; });
+watch(taskPageSize, () => { taskPage.value = 1; });
+watch(() => visibleTasks.value.length, () => { taskPage.value = Math.min(taskPage.value, taskPageCount.value); });
+function priMeta(priority) {
+  return { P0: { cls: "urgent", txt: "紧急" }, P1: { cls: "high", txt: "高" }, P2: { cls: "mid", txt: "中" } }[priority] || { cls: "low", txt: "低" };
+}
+function stTagCls(status) {
+  return { "待确认": "ts-confirm", "未完成": "ts-doing", "未开始": "ts-wait", "已完成": "ts-done", "延期": "ts-delay" }[status] || "ts-doing";
+}
+function dotCls(status) {
+  return { "进行中": "doing", "未完成": "doing", "未开始": "wait", "延期": "delay", "已完成": "done" }[status] || "doing";
+}
+function fileIconCls(type) {
+  const t = String(type || "").toUpperCase();
+  if (t.includes("DOC")) return "fi-doc";
+  if (t.includes("XLS")) return "fi-xls";
+  if (t.includes("PPT")) return "fi-ppt";
+  if (t.includes("PNG") || t.includes("JPG") || t.includes("IMG")) return "fi-img";
+  if (t.includes("ZIP") || t.includes("RAR")) return "fi-zip";
+  if (t.includes("PDF")) return "fi-pdf";
+  return "fi-doc";
+}
+function fileIconTxt(type) {
+  const t = String(type || "FILE").toUpperCase();
+  if (t.includes("DOC")) return "W";
+  if (t.includes("XLS")) return "X";
+  if (t.includes("PPT")) return "P";
+  if (t.includes("PNG") || t.includes("JPG") || t.includes("IMG")) return "P";
+  if (t.includes("ZIP") || t.includes("RAR")) return "Z";
+  if (t.includes("PDF")) return "P";
+  return "F";
+}
+function rejectTaskConfirm(task) {
+  updateTaskStatus(task.id, "未完成", "已退回，请修改后重新提交");
+}
 watch([normalizedKeyword, filteredProjects], () => {
   if (!normalizedKeyword.value) return;
   expandedKeys.value = filteredProjects.value.flatMap(customer => customer.projects.map(project => project.key));
@@ -695,21 +951,49 @@ function handleNavigation(key) {
   activeNav.value = "项目";
   notify(`${key}模块将在后续设计`);
 }
+function completeLogin(successMessage) {
+  localStorage.removeItem(authStorageKey);
+  sessionStorage.removeItem(authStorageKey);
+  const storage = loginDraft.value.remember ? localStorage : sessionStorage;
+  storage.setItem(authStorageKey, "authenticated");
+  isAuthenticated.value = true;
+  activeNav.value = "工作台";
+  loginDraft.value.password = "";
+  loginDraft.value.verificationCode = "";
+  Message.success(successMessage);
+}
+async function sendLoginVerificationCode() {
+  const phone = loginDraft.value.phone.trim();
+  if (!/^1[3-9]\d{9}$/.test(phone)) { loginError.value = "请输入邀请时填写的 11 位手机号"; return; }
+  if (loginCodeSending.value || loginCodeCountdown.value > 0) return;
+  loginCodeSending.value = true;
+  loginError.value = "";
+  try {
+    await new Promise(resolve => window.setTimeout(resolve, 450));
+    loginCodeCountdown.value = 60;
+    window.clearInterval(loginCodeTimer);
+    loginCodeTimer = window.setInterval(() => {
+      loginCodeCountdown.value -= 1;
+      if (loginCodeCountdown.value <= 0) {
+        window.clearInterval(loginCodeTimer);
+        loginCodeTimer = null;
+      }
+    }, 1000);
+    Message.success("验证码已发送，请注意查收");
+  } finally {
+    loginCodeSending.value = false;
+  }
+}
 async function handleLogin() {
-  const account = loginDraft.value.account.trim();
-  if (!account) { loginError.value = "请输入账号"; return; }
-  if (!loginDraft.value.password) { loginError.value = "请输入密码"; return; }
+  const phone = loginDraft.value.phone.trim();
+  const verificationCode = loginDraft.value.verificationCode.trim();
+  if (!/^1[3-9]\d{9}$/.test(phone)) { loginError.value = "请输入邀请时填写的 11 位手机号"; return; }
+  if (!/^\d{6}$/.test(verificationCode)) { loginError.value = "请输入 6 位短信验证码"; return; }
   loginLoading.value = true;
   loginError.value = "";
   try {
-    localStorage.removeItem(authStorageKey);
-    sessionStorage.removeItem(authStorageKey);
-    const storage = loginDraft.value.remember ? localStorage : sessionStorage;
-    storage.setItem(authStorageKey, "authenticated");
-    isAuthenticated.value = true;
-    activeNav.value = "工作台";
-    loginDraft.value.password = "";
-    Message.success("登录成功");
+    await new Promise(resolve => window.setTimeout(resolve, 350));
+    completeLogin("手机号验证成功");
   } finally {
     loginLoading.value = false;
   }
@@ -725,7 +1009,7 @@ async function handleSocialLogin(provider) {
   }
   await new Promise(resolve => window.setTimeout(resolve, 450));
   socialLoginProvider.value = "";
-  loginError.value = `${provider}授权服务尚未配置，请联系系统管理员完成授权应用配置`;
+  completeLogin(`${provider}授权登录成功`);
 }
 function handleLogout() {
   Modal.confirm({
@@ -751,6 +1035,7 @@ function handleLogout() {
       activeNav.value = "工作台";
       loginError.value = "";
       loginDraft.value.password = "";
+      loginDraft.value.verificationCode = "";
       passwordError.value = "";
       passwordDraft.value = { currentPassword: "", newPassword: "", confirmPassword: "" };
       Message.success("已退出登录");
@@ -1000,7 +1285,6 @@ function importTasks(event) {
       imported.push({
         id: `T-${Date.now().toString().slice(-6)}${imported.length}`,
         createdAt: Date.now() + imported.length,
-        taskType: "项目任务",
         phase: selectedPhase.value.key,
         title,
         module: values[indexOf("模块")]?.trim() || "导入任务",
@@ -1278,10 +1562,9 @@ function saveProjectInfo() {
 }
 function createTask() {
   const executors = draft.value.executors?.length ? [...draft.value.executors] : [draft.value.confirmer || "李项目"];
-  const isOtherTask = taskCreationSource.value !== "project" && draft.value.taskType === "其他任务";
   const phase = taskCreationSource.value === "project" ? selectedPhase.value?.key : draft.value.phase;
-  if (!isOtherTask && !phase) { Message.warning("项目任务必须选择项目期号"); return; }
-  const task = { ...draft.value, taskType: isOtherTask ? "其他任务" : "项目任务", subtasks: [...(draft.value.subtasks || [])], createdAt: Date.now(), owner: executors[0], confirmer: draft.value.confirmer || "李项目", executors, id: `T-${Date.now().toString().slice(-6)}`, phase: isOtherTask ? null : phase, start: "2026-08-18", progress: draft.value.status === "已完成" ? 100 : 0 };
+  if (!phase) { Message.warning("请选择项目期号"); return; }
+  const task = { ...draft.value, subtasks: [...(draft.value.subtasks || [])], createdAt: Date.now(), owner: executors[0], confirmer: draft.value.confirmer || "李项目", executors, id: `T-${Date.now().toString().slice(-6)}`, phase, start: "2026-08-18", progress: draft.value.status === "已完成" ? 100 : 0 };
   tasks.value = [task, ...tasks.value]; boardOrder.value = [task.id, ...boardOrder.value];
   appendTaskActivity(task.id, "创建任务", `创建任务“${task.title}”`);
   taskModalVisible.value = false; Message.success("任务创建成功");
@@ -1527,16 +1810,10 @@ function openTaskModal() {
   taskCreationSource.value = activeNav.value === "项目" ? "project" : "task";
   draft.value = emptyDraft();
   draft.value.phase = selectedPhase.value?.key || dashboardPhaseRows.value[0]?.key || "";
-  if (taskCreationSource.value === "project") draft.value.taskType = "项目任务";
   cancelDraftSubtask();
   cancelDraftSubtaskEdit();
   draggedDraftSubtaskId.value = null;
   taskModalVisible.value = true;
-}
-function setTaskDraftType(taskType) {
-  draft.value.taskType = taskType;
-  if (taskType === "其他任务") draft.value.phase = "";
-  else if (!draft.value.phase) draft.value.phase = selectedPhase.value?.key || dashboardPhaseRows.value[0]?.key || "";
 }
 function appendTaskActivity(taskId, action, detail) {
   const activity = { id: `activity-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, action, detail, operator: "李项目", createdAt: "刚刚" };
@@ -1908,7 +2185,7 @@ function openWorkHoursDailyReport(report) {
   openDailyReport(report);
 }
 function createDailyReportTask() {
-  return { id: `draft-task-${Date.now()}-${Math.random().toString(16).slice(2)}`, taskId: "", taskType: "project", title: "", phase: "", hours: 0, summary: "", blockers: "" };
+  return { id: `draft-task-${Date.now()}-${Math.random().toString(16).slice(2)}`, taskId: "", category: dailyReportTaskCategoryOptions.value[0] || "", title: "", phase: "", hours: 0, summary: "", blockers: "" };
 }
 function addDailyReportTask() {
   dailyReportDraft.value.tasks = [...(dailyReportDraft.value.tasks || []), createDailyReportTask()];
@@ -1919,9 +2196,6 @@ function removeDailyReportTask(entry) {
     return;
   }
   dailyReportDraft.value.tasks = dailyReportDraft.value.tasks.filter(item => item.id !== entry.id);
-}
-function setDailyReportTaskType(entry, taskType) {
-  Object.assign(entry, { taskType, taskId: "", title: "", phase: "", summary: "", blockers: "" });
 }
 function openDailyReportModal(report = null) {
   if (!canManageReports.value) { Message.warning("当前账号没有日报管理权限"); return; }
@@ -1938,13 +2212,12 @@ function syncDailyReportName() {
 }
 function saveDailyReport(nextStatus = dailyReportDraft.value.status) {
   const draft = dailyReportDraft.value;
-  const entries = (draft.tasks || []).map(entry => {
-    const taskType = entry.taskType || (entry.phase ? "project" : "nonProject");
-    return { ...entry, taskType, phase: taskType === "project" ? entry.phase : "", title: String(entry.title || "").trim(), summary: String(entry.summary || "").trim(), blockers: "", hours: Number(entry.hours || 0) };
-  });
-  if (!draft.date || !entries.length || entries.some(entry => !entry.title || !entry.summary || entry.hours <= 0)) { Message.warning("请填写日报日期，并完整填写每条任务的名称、工时和任务内容"); return; }
-  if (entries.some(entry => entry.taskType === "project" && !entry.phase)) { Message.warning("项目任务必须关联期号；其他任务无需关联期号"); return; }
+  const entries = (draft.tasks || []).map(entry => ({ ...entry, category: String(entry.category || "").trim(), title: String(entry.title || "").trim(), summary: String(entry.summary || "").trim(), blockers: "", hours: Number(entry.hours || 0) }));
+  if (!draft.date || !entries.length || entries.some(entry => !entry.category || !entry.title || entry.hours <= 0)) { Message.warning("请填写日报日期，并完整填写每条任务的分类、任务内容和工时"); return; }
+  if (entries.some(entry => !entry.phase)) { Message.warning("每条日报任务都必须关联项目期号"); return; }
   const sender = draft.sender || accountProfile.value.nickname;
+  const allowedCategories = dailyTaskCategoriesForSender(sender);
+  if (entries.some(entry => !allowedCategories.includes(entry.category))) { Message.warning("请选择与当前人员角色匹配的任务分类"); return; }
   const report = normalizeDailyReport({ ...draft, status: nextStatus, tasks: entries, phase: entries.find(entry => entry.phase)?.phase || "", name: `${sender}的日报 ${draft.date}`, sender, sentAt: `${draft.date} 18:00` });
   if (dailyReportEditingId.value) {
     const index = dailyReports.value.findIndex(item => item.id === dailyReportEditingId.value);
@@ -1989,9 +2262,20 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener("click", handleWorklogClick);
   document.removeEventListener("click", handleRichTextMediaClick);
+  window.clearInterval(loginCodeTimer);
 });
-function openPhaseFileModal() { if (!hasPermission("文件管理")) { Message.warning("当前账号没有文件管理权限"); return; } phaseFileEditingId.value = null; phaseFileDraft.value = { file: null, current: null }; if (phaseFileInput.value) phaseFileInput.value.value = ""; phaseFileModalVisible.value = true; }
-function openPhaseFileEdit(file) { if (!hasPermission("文件管理")) { Message.warning("当前账号没有文件管理权限"); return; } phaseFileEditingId.value = file.id; phaseFileDraft.value = { file: null, current: file }; if (phaseFileInput.value) phaseFileInput.value.value = ""; phaseFileModalVisible.value = true; }
+function openPhaseFileModal() { if (!hasPermission("文件管理")) { Message.warning("当前账号没有文件管理权限"); return; } phaseFileEditingId.value = null; phaseFileDraft.value = { file: null, current: null }; if (phaseUploadInput.value) phaseUploadInput.value.value = ""; phaseUploadModalVisible.value = true; }
+function openPhaseFileEdit(file) {
+  if (!hasPermission("文件管理")) { Message.warning("当前账号没有文件管理权限"); return; }
+  if (phaseOnlineFileTypes.some(option => option.type === file.type)) {
+    openPhaseOnlineFileEditor(file.type, file);
+    return;
+  }
+  phaseFileEditingId.value = file.id;
+  phaseFileDraft.value = { file: null, current: file };
+  if (phaseFileInput.value) phaseFileInput.value.value = "";
+  phaseFileModalVisible.value = true;
+}
 function formatFileSize(bytes) {
   if (!bytes) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
@@ -2001,6 +2285,20 @@ function formatFileSize(bytes) {
 }
 function handlePhaseFileChange(event) {
   const file = event.target.files?.[0] || null;
+  if (!file) { phaseFileDraft.value = { ...phaseFileDraft.value, file: null }; return; }
+  const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "";
+  if (!phaseFileAllowedExtensions.has(extension)) {
+    event.target.value = "";
+    phaseFileDraft.value = { ...phaseFileDraft.value, file: null };
+    Message.warning("暂不支持该文件格式，请上传 Word、Excel、PPT、PDF、图片或压缩包");
+    return;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    event.target.value = "";
+    phaseFileDraft.value = { ...phaseFileDraft.value, file: null };
+    Message.warning("单个文件不能超过 50 MB");
+    return;
+  }
   phaseFileDraft.value = { ...phaseFileDraft.value, file };
 }
 function savePhaseFile() {
@@ -2010,23 +2308,151 @@ function savePhaseFile() {
   const metadata = { name: file.name, type: extension, size: formatFileSize(file.size), source: file, updated: new Date().toISOString().slice(0, 10) };
   const nextFiles = phaseFileEditingId.value
     ? currentPhaseFiles.value.map(item => item.id === phaseFileEditingId.value ? { ...item, ...metadata } : item)
-    : [...currentPhaseFiles.value, { id: `file-${Date.now()}`, ...metadata }];
+    : [{ id: `file-${Date.now()}`, ...metadata }, ...currentPhaseFiles.value];
   phaseFiles.value = { ...phaseFiles.value, [selectedPhase.value.key]: nextFiles };
   phaseFileModalVisible.value = false;
+  phaseUploadModalVisible.value = false;
   Message.success(phaseFileEditingId.value ? "项目文件已更新" : "项目文件已添加");
   phaseFileEditingId.value = null;
+}
+function createPhaseOnlineFileDraft(type, file = null) {
+  const option = phaseOnlineFileTypes.find(item => item.type === type) || phaseOnlineFileTypes[0];
+  const suffix = `.${option.extension}`;
+  const sourceName = file?.name || option.defaultName;
+  const name = sourceName.toLowerCase().endsWith(suffix) ? sourceName.slice(0, -suffix.length) : sourceName;
+  return {
+    type: option.type,
+    name,
+    content: file?.content || "",
+    cells: { ...(file?.cells || {}) },
+    slides: file?.slides?.length ? JSON.parse(JSON.stringify(file.slides)) : [{ id: `slide-${Date.now()}`, layout: "content", title: "演示文稿标题", body: "" }],
+    sheetRows: file?.sheetRows || 20,
+    sheetColumns: file?.sheetColumns || 10,
+  };
+}
+function openPhaseOnlineFileEditor(type, file = null) {
+  if (!hasPermission("文件管理")) { Message.warning("当前账号没有文件管理权限"); return; }
+  phaseOnlineFileDraft.value = createPhaseOnlineFileDraft(type, file);
+  onlineFileEditorPhaseKey.value = selectedPhase.value.key;
+  onlineFileEditorFileId.value = file?.id || null;
+  onlineFileSavedSnapshot.value = file ? JSON.stringify(phaseOnlineFileDraft.value) : "";
+  onlineFileEditorVisible.value = true;
+}
+function savePhaseOnlineFile(nextDraft) {
+  const option = phaseOnlineFileTypes.find(item => item.type === nextDraft.type) || phaseOnlineFileTypes[0];
+  const name = nextDraft.name.trim();
+  if (!name) { Message.warning("请输入文件名称"); return; }
+  const suffix = `.${option.extension}`;
+  const fileName = name.toLowerCase().endsWith(suffix) ? name : `${name}${suffix}`;
+  const phaseKey = onlineFileEditorPhaseKey.value;
+  const editorPhaseFiles = phaseFiles.value[phaseKey] || [];
+  if (editorPhaseFiles.some(file => file.id !== onlineFileEditorFileId.value && file.name.toLowerCase() === fileName.toLowerCase())) {
+    Message.warning("当前期号已存在同名文件");
+    return;
+  }
+  const serializedContent = JSON.stringify(nextDraft);
+  const sizeInKb = Math.max(1, Math.ceil(new Blob([serializedContent]).size / 1024));
+  const onlineFile = {
+    id: onlineFileEditorFileId.value || `file-${Date.now()}`,
+    name: fileName,
+    type: option.type,
+    size: `${sizeInKb} KB`,
+    updated: new Date().toISOString().slice(0, 10),
+    updatedBy: accountProfile.value.nickname,
+    online: true,
+    content: nextDraft.content || "",
+    cells: { ...(nextDraft.cells || {}) },
+    slides: JSON.parse(JSON.stringify(nextDraft.slides || [])),
+    sheetRows: nextDraft.sheetRows || 20,
+    sheetColumns: nextDraft.sheetColumns || 10,
+  };
+  const editing = Boolean(onlineFileEditorFileId.value);
+  const nextFiles = editing
+    ? editorPhaseFiles.map(file => file.id === onlineFileEditorFileId.value ? { ...file, ...onlineFile } : file)
+    : [onlineFile, ...editorPhaseFiles];
+  phaseFiles.value = { ...phaseFiles.value, [phaseKey]: nextFiles };
+  onlineFileEditorFileId.value = onlineFile.id;
+  phaseOnlineFileDraft.value = JSON.parse(serializedContent);
+  onlineFileSavedSnapshot.value = serializedContent;
+  phaseFileKeyword.value = "";
+  phaseFileTypeFilter.value = "全部类型";
+  fileViewMode.value = "brief";
+  Message.success(editing ? `${option.label}已保存` : `${option.label}已新建并保存`);
+}
+function closePhaseOnlineFileEditor({ dirty }) {
+  const close = () => {
+    onlineFileEditorVisible.value = false;
+    onlineFileEditorFileId.value = null;
+    onlineFileEditorPhaseKey.value = "";
+  };
+  if (!dirty) { close(); return; }
+  Modal.confirm({
+    title: "退出在线编辑",
+    content: "当前修改尚未保存，确定放弃修改并返回项目文件吗？",
+    okText: "放弃修改",
+    cancelText: "继续编辑",
+    onOk: close,
+  });
 }
 function previewPhaseFile(file) {
   if (phaseFilePreviewUrl.value) URL.revokeObjectURL(phaseFilePreviewUrl.value);
   phaseFilePreview.value = file;
+  if (file.online) {
+    phaseFilePreviewUrl.value = "";
+    onlineFilePreviewVisible.value = true;
+    return;
+  }
   phaseFilePreviewUrl.value = file.source ? URL.createObjectURL(file.source) : "";
   phaseFilePreviewVisible.value = true;
+}
+function closeOnlinePhaseFilePreview() {
+  onlineFilePreviewVisible.value = false;
+  phaseFilePreview.value = null;
 }
 function closePhaseFilePreview() {
   if (phaseFilePreviewUrl.value) URL.revokeObjectURL(phaseFilePreviewUrl.value);
   phaseFilePreviewUrl.value = "";
   phaseFilePreview.value = null;
   phaseFilePreviewVisible.value = false;
+}
+function triggerPhaseFileDownload(content, fileName, mimeType) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+function phaseFileBaseName(file) {
+  return String(file.name || "项目文件").replace(/\.[^.]+$/, "");
+}
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+function exportPhaseOnlineFile(file) {
+  if (!file?.online) return;
+  const baseName = phaseFileBaseName(file);
+  if (file.type === "XLSX") {
+    const columns = Array.from({ length: Math.max(1, Number(file.sheetColumns || 10)) }, (_, index) => String.fromCharCode(65 + index));
+    const rows = Array.from({ length: Math.max(1, Number(file.sheetRows || 20)) }, (_, rowIndex) => columns.map(column => csvCell(file.cells?.[`${column}${rowIndex + 1}`] || "")).join(","));
+    triggerPhaseFileDownload(`\uFEFF${rows.join("\n")}`, `${baseName}.csv`, "text/csv;charset=utf-8");
+  } else if (file.type === "PPTX") {
+    const outline = (file.slides || []).map((slide, index) => [`第 ${index + 1} 页`, slide.title || "无标题", slide.body || ""].join("\n")).join("\n\n");
+    triggerPhaseFileDownload(outline || "暂无内容", `${baseName}.txt`, "text/plain;charset=utf-8");
+  } else {
+    const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>${baseName}</title></head><body>${file.content || "<p>暂无内容</p>"}</body></html>`;
+    triggerPhaseFileDownload(html, `${baseName}.html`, "text/html;charset=utf-8");
+  }
+  Message.success(`已导出：${file.name}`);
+}
+function downloadPhaseFile(file) {
+  if (file?.source instanceof Blob) {
+    triggerPhaseFileDownload(file.source, file.name, file.source.type || "application/octet-stream");
+    Message.success(`已开始下载：${file.name}`);
+    return;
+  }
+  Message.info(`演示文件“${file.name}”暂无本地文件源`);
 }
 function removePhaseFile(file) {
   if (!hasPermission("文件管理")) { Message.warning("当前账号没有文件管理权限"); return; }
@@ -2211,33 +2637,50 @@ function saveTeamPermissions() {
   return true;
 }
 function phaseStatusColor(status) { return statusColors[status] || "gray"; }
+function phaseProgress(phase) {
+  if (phase.status === "已完成") return 100;
+  if (Number.isFinite(Number(phase.progress))) return Number(phase.progress);
+  const phaseTasks = tasks.value.filter(task => task.phase === phase.key);
+  if (!phaseTasks.length) return 0;
+  return Math.round(phaseTasks.filter(task => task.status === "已完成").length / phaseTasks.length * 100);
+}
+function phaseTaskCount(phase) { return tasks.value.filter(task => task.phase === phase.key).length; }
+function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.due} 已逾期` : `${task.due} 今天`; }
 </script>
 
 <template>
   <main v-if="!isAuthenticated" class="login-page">
-    <header class="login-header"><span class="login-brand"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" class="login-brand-logo" /><span v-else class="pm-logo-mark" aria-label="PM">PM</span><strong>{{ systemSettingsDraft.name }}</strong></span><span>软件项目交付管理平台</span></header>
+    <header class="login-header"><span class="login-brand"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" :alt="systemSettingsDraft.name" class="login-brand-logo" /><span v-else class="brand-wordmark">{{ systemSettingsDraft.name }}</span></span><span>软件项目交付管理平台</span></header>
     <section class="login-panel" aria-labelledby="login-title">
       <div class="login-panel-heading"><span class="login-security-icon"><IconSafe /></span><div><h1 id="login-title">登录海拔PM</h1><p>进入项目、期号与任务协作空间</p></div></div>
-      <form class="login-form" @submit.prevent="handleLogin">
-        <label for="login-account">账号</label>
-        <a-input id="login-account" v-model="loginDraft.account" size="large" allow-clear placeholder="手机号、邮箱或成员账号" @input="loginError = ''"><template #prefix><IconUser /></template></a-input>
-        <label for="login-password">密码</label>
-        <a-input-password id="login-password" v-model="loginDraft.password" size="large" allow-clear placeholder="请输入密码" @input="loginError = ''" @keyup.enter="handleLogin"><template #prefix><IconLock /></template></a-input-password>
+      <a-radio-group v-model="loginMode" class="login-role-switch" type="button" size="large" @change="loginError = ''">
+        <a-radio value="internal">内部成员</a-radio>
+        <a-radio value="external">外部用户</a-radio>
+      </a-radio-group>
+      <section v-if="loginMode === 'internal'" class="enterprise-login" aria-label="内部成员登录">
+        <div class="login-method-summary"><span class="login-method-icon wecom"><IconSafe /></span><span><strong>企业微信授权登录</strong><small>使用公司企业微信身份进入系统</small></span></div>
         <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
-        <div class="login-options"><a-checkbox v-model="loginDraft.remember">保持登录</a-checkbox><a-button type="text" size="small" @click="notify('请联系系统管理员重置密码')">忘记密码</a-button></div>
+        <a-button class="login-submit" type="primary" size="large" long :loading="socialLoginProvider === '企业微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('企业微信')"><IconSafe />企业微信授权登录</a-button>
+      </section>
+      <form v-else class="login-form" @submit.prevent="handleLogin">
+        <p class="login-form-intro">仅限已收到项目邀请的外包人员或客户登录</p>
+        <label for="login-phone">手机号</label>
+        <a-input id="login-phone" v-model="loginDraft.phone" size="large" allow-clear maxlength="11" input-mode="numeric" placeholder="请输入邀请时填写的手机号" @input="loginError = ''"><template #prefix><IconMobile /></template></a-input>
+        <label for="login-code">验证码</label>
+        <div class="login-code-row">
+          <a-input id="login-code" v-model="loginDraft.verificationCode" size="large" allow-clear maxlength="6" input-mode="numeric" placeholder="请输入 6 位验证码" @input="loginError = ''" @keyup.enter="handleLogin"><template #prefix><IconMessage /></template></a-input>
+          <a-button size="large" :loading="loginCodeSending" :disabled="loginCodeCountdown > 0" @click="sendLoginVerificationCode">{{ loginCodeCountdown > 0 ? `${loginCodeCountdown}s` : '获取验证码' }}</a-button>
+        </div>
+        <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
+        <div class="login-options"><a-checkbox v-model="loginDraft.remember">保持登录</a-checkbox><span>验证码 5 分钟内有效</span></div>
         <a-button class="login-submit" type="primary" html-type="submit" size="large" long :loading="loginLoading">登录</a-button>
       </form>
-      <div class="login-divider"><span>其他方式登录</span></div>
-      <div class="social-login-list">
-        <a-button class="social-login-button wechat-login" size="large" long :loading="socialLoginProvider === '微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('微信')"><IconWechat />微信授权登录</a-button>
-        <a-button class="social-login-button wecom-login" size="large" long :loading="socialLoginProvider === '企业微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('企业微信')"><IconSafe />企业微信授权登录</a-button>
-      </div>
-      <footer><IconSafe />登录状态仅保存在当前浏览器，不会保存密码</footer>
+      <footer><IconSafe />身份仅用于项目权限校验，不会保存验证码</footer>
     </section>
   </main>
   <div v-else class="app-shell">
     <header class="global-header">
-      <a-button class="brand" type="text" @click="notify(systemSettingsDraft.name)"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" class="brand-logo" /><span v-else class="pm-logo-mark" aria-label="PM">PM</span><strong>{{ systemSettingsDraft.name }}</strong></a-button>
+      <a-button class="brand" type="text" :aria-label="systemSettingsDraft.name" @click="notify(systemSettingsDraft.name)"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" :alt="systemSettingsDraft.name" class="brand-logo" /><span v-else class="brand-wordmark">{{ systemSettingsDraft.name }}</span></a-button>
       <a-menu class="global-nav" mode="horizontal" :selected-keys="[activeNav]" @menu-item-click="handleNavigation"><a-menu-item v-for="item in visibleNavItems" :key="item">{{ item }}</a-menu-item></a-menu>
       <div class="header-actions">
         <a-tooltip v-if="canManageSystem" content="系统设置"><a-button type="text" aria-label="系统设置" @click="openSystemSettings"><IconSettings />设置</a-button></a-tooltip>
@@ -2247,41 +2690,79 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       </div>
     </header>
 
-    <main v-if="activeNav === '工作台'" class="workbench-page">
-      <header class="workbench-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · {{ dashboardDate }}</span><h1>工作台</h1><p>{{ isManagementRole ? '查看全部项目期号、任务与交付风险。' : '聚焦与你相关的项目期号和待办任务。' }}</p></div><a-button type="primary" @click="activeNav = '项目'"><IconApps />进入项目</a-button></header>
-      <section class="workbench-panel workbench-todo-panel"><header><div><h2>今日待办</h2><span>{{ dashboardTodayTodos.length }} 项待处理 · {{ dashboardTodayTodos.filter(task => task.due < dashboardDate).length }} 项已逾期</span></div><a-button type="text" @click="activeNav = '任务'"><IconList />查看全部任务</a-button></header><div class="workbench-todo-list"><div v-for="task in dashboardTodayTodos.slice(0, 6)" :key="task.id" class="workbench-todo-item" role="button" tabindex="0" :aria-label="`${task.title}，${taskChecklistHint(task)}`" @click="openTaskFromRow(task)" @keydown="handleTaskRowKeydown($event, task)"><span class="workbench-todo-marker" :class="{ pending: task.status === '待确认', overdue: task.due < dashboardDate }"><a-tooltip :content="taskChecklistLabel(task)"><a-checkbox :model-value="task.status === '已完成'" :indeterminate="task.status === '待确认'" :disabled="!taskChecklistAction(task)" :aria-label="`${task.title}：${taskChecklistLabel(task)}`" @click.stop @change="handleTaskChecklistChange(task)" /></a-tooltip></span><span class="workbench-todo-copy"><span><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><strong>{{ task.title }}</strong><small v-if="phaseByKey(task.phase)">{{ phaseByKey(task.phase)?.code }} · {{ phaseByKey(task.phase)?.name }} · {{ task.owner }}</small><small v-else>其他任务 · {{ task.owner }}</small></span><span class="workbench-todo-due" :class="{ overdue: task.due < dashboardDate }"><strong>{{ task.due < dashboardDate ? '已逾期' : '今日截止' }}</strong><small>{{ task.due }}</small></span></div><a-empty v-if="!dashboardTodayTodos.length" description="今日暂无待办" /></div></section>
-      <section class="workbench-panel"><header><div><h2>任务列表</h2><span>按优先级和创建时间排序 · 点击任务查看详情，按权限提交或确认</span></div><a-button type="text" @click="activeNav = '任务'"><IconList />查看全部</a-button></header><div class="workbench-task-table"><div class="workbench-row workbench-row-heading"><span>处理</span><span>任务名称</span><span>项目期号</span><span>负责人</span><span>状态</span><span>截止时间</span></div><div v-for="task in dashboardTasks" :key="task.id" class="workbench-row" role="button" tabindex="0" :aria-label="`${task.title}，${taskChecklistHint(task)}`" @click="openTaskFromRow(task)" @keydown="handleTaskRowKeydown($event, task)"><span class="workbench-row-check"><a-tooltip :content="taskChecklistLabel(task)"><a-checkbox :model-value="task.status === '已完成'" :indeterminate="task.status === '待确认'" :disabled="!taskChecklistAction(task)" :aria-label="`${task.title}：${taskChecklistLabel(task)}`" @click.stop @change="handleTaskChecklistChange(task)" /></a-tooltip></span><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span v-if="phaseByKey(task.phase)">{{ phaseByKey(task.phase)?.code }} · {{ phaseByKey(task.phase)?.name }}</span><span v-else>其他任务</span><span>{{ task.owner }}</span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag><small class="task-status-hint">{{ taskChecklistHint(task) }}</small></span><span>{{ task.due }}</span></div><a-empty v-if="!dashboardTasks.length" description="暂无相关任务" /></div></section>
-      <section class="workbench-overview" aria-label="交付概览"><header><div><h2>交付概览</h2><span>当前可见范围的期号盘面</span></div><a-button type="text" @click="activeNav = '统计'"><IconArrowRise />查看统计</a-button></header><section class="workbench-stat-grid"><article><span>项目期号数量</span><strong>{{ dashboardStats.total }}</strong><small>当前可见范围</small></article><article><span>进行中期号</span><strong>{{ dashboardStats.inProgress }}</strong><small>正在交付</small></article><article><span>已完成期号</span><strong>{{ dashboardStats.completed }}</strong><small>完成率 {{ dashboardStats.completionRate }}%</small></article><article class="stat-danger"><span>延期期号</span><strong>{{ dashboardStats.delayed }}</strong><small>延期率 {{ dashboardStats.delayRate }}%</small></article></section></section>
-      <section class="workbench-panel"><header><div><h2>期号列表</h2><span>按当前账号权限展示</span></div><a-button type="text" @click="activeNav = '项目'"><IconFolder />查看项目</a-button></header><div class="workbench-phase-grid"><button v-for="phase in dashboardPhaseRows" :key="phase.key" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.customerCode }}-{{ phase.projectCode }} · {{ phase.projectName }}</strong><small>{{ phase.code }} · {{ phase.name }}</small></span><span class="workbench-phase-meta"><small>负责人：{{ phase.owner }}</small><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></span></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section>
+    <main v-if="activeNav === '工作台'" class="workbench-page workbench-reference-page" :class="`role-${accountRole}`">
+      <header class="workbench-heading workbench-reference-heading">
+        <div><h1>工作台 <a-tag>{{ dashboardRoleLabel }} · {{ dashboardDate }}</a-tag></h1><p>{{ dashboardRoleDescription }}</p></div>
+        <div class="workbench-heading-actions"><a-button v-if="isManagementRole" type="primary" @click="activeNav = '项目'"><IconApps />进入项目</a-button><a-button v-else-if="canManageTasks" type="primary" @click="openTaskModal"><IconPlus />新建任务</a-button></div>
+      </header>
+
+      <section v-if="isManagementRole" class="workbench-management-reference">
+        <section class="workbench-reference-stats">
+          <button><span>项目期号总数</span><strong>{{ dashboardStats.total }}<small>个</small></strong><i :style="{ width: '100%' }"></i></button>
+          <button><span>进行中期号</span><strong>{{ dashboardStats.inProgress }}<small>个</small></strong><i :style="{ width: `${dashboardStats.total ? Math.round(dashboardStats.inProgress / dashboardStats.total * 100) : 0}%` }"></i></button>
+          <button><span>已完成期号</span><strong>{{ dashboardStats.completed }}<small>个</small></strong><i :style="{ width: `${dashboardStats.completionRate}%` }"></i></button>
+          <button class="is-danger"><span>延期期号</span><strong>{{ dashboardStats.delayed }}<small>个</small></strong><i :style="{ width: `${dashboardStats.delayRate}%` }"></i></button>
+          <button><span>完成率</span><strong>{{ dashboardStats.completionRate }}<small>%</small></strong><i :style="{ width: `${dashboardStats.completionRate}%` }"></i></button>
+          <button class="is-danger"><span>延期率</span><strong>{{ dashboardStats.delayRate }}<small>%</small></strong><i :style="{ width: `${dashboardStats.delayRate}%` }"></i></button>
+        </section>
+        <section class="workbench-reference-duo workbench-management-duo">
+          <section class="workbench-reference-panel"><header><div><h2>日报发送情况</h2><span>应发 = 当前启用成员</span></div><a-button type="text" @click="activeNav = '日报'">查看日报 <IconArrowRise /></a-button></header><div class="workbench-report-summary"><div v-for="row in statsReportSummary" :key="row.status"><span><i :class="`report-status-${row.status}`"></i>{{ row.status }}</span><strong>{{ row.count }}</strong><small>份日报</small></div></div><div class="workbench-report-chart" aria-label="近七日日报发送趋势"><div v-for="day in dashboardReportSeries" :key="day.label" class="workbench-report-chart-day"><span class="workbench-report-chart-bars"><i class="is-pending" :style="{ height: `${day.pending ? Math.max(8, day.pending / Math.max(day.total, 1) * day.height) : 0}%` }"></i><i class="is-sent" :style="{ height: `${day.sent ? day.sent / Math.max(day.total, 1) * day.height : 0}%` }"></i></span><b>{{ day.total }}</b><small>{{ day.label }}</small></div></div></section>
+          <section class="workbench-reference-panel"><header><div><h2>团队负荷</h2><span>按未完成任务与登记工时汇总</span></div><a-button type="text" @click="activeNav = '统计'">查看团队 <IconArrowRise /></a-button></header><div class="workbench-load-list"><div v-for="row in statsMemberRows.slice(0, 5)" :key="row.name" class="workbench-load-row"><a-avatar :size="26">{{ row.name.slice(0, 1) }}</a-avatar><strong>{{ row.name }}</strong><span class="workbench-load-track"><i :style="{ width: `${Math.min(row.tasks * 18, 100)}%` }"></i></span><small>{{ row.tasks }} 项 · {{ row.hours }}h<em v-if="row.overdue"> · {{ row.overdue }} 项逾期</em></small></div><a-empty v-if="!statsMemberRows.length" description="暂无团队负荷" /></div></section>
+        </section>
+        <section class="workbench-reference-panel workbench-reference-table-panel"><header><div><h2>任务列表</h2><span>按优先级与创建时间排序 · 可直接处理状态</span></div><a-button type="text" @click="activeNav = '任务'">查看全部 <IconArrowRise /></a-button></header><div class="workbench-reference-table"><div class="workbench-reference-table-row is-heading"><span>优先级</span><span>任务名称</span><span>所属期号</span><span>负责人</span><span>状态</span><span>截止时间</span><span>操作</span></div><div v-for="task in dashboardTasks" :key="task.id" class="workbench-reference-table-row" :class="{ 'is-overdue': task.due < dashboardDate }" role="button" tabindex="0" @click="openTaskFromRow(task)" @keydown="handleTaskRowKeydown($event, task)"><span><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag></span><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span>{{ phaseByKey(task.phase)?.code || '期号未配置' }}<small>{{ phaseByKey(task.phase)?.name || '待补充' }}</small></span><span>{{ task.owner }}</span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span :class="{ 'is-danger': task.due < dashboardDate }">{{ taskDueLabel(task) }}</span><span><a-button v-if="task.status !== '已完成'" type="primary" size="small" @click.stop="requestTaskStatusChange(task.id, task.status === '待确认' ? '已完成' : '待确认')">{{ task.status === '待确认' ? '确认完成' : '提交确认' }}</a-button><span v-else class="workbench-muted">已完成</span></span></div><a-empty v-if="!dashboardTasks.length" description="暂无相关任务" /></div></section>
+        <section class="workbench-reference-panel workbench-reference-table-panel"><header><div><h2>期号列表</h2><span>按当前账号权限展示</span></div><a-button type="text" @click="activeNav = '项目'">查看项目 <IconArrowRise /></a-button></header><div class="workbench-reference-table workbench-phase-reference-table"><div class="workbench-reference-table-row is-heading"><span>期号</span><span>项目</span><span>进度</span><span>任务数</span><span>负责人</span><span>状态</span></div><button v-for="phase in dashboardPhaseRows" :key="phase.key" class="workbench-reference-table-row" :class="{ 'is-overdue': phase.status === '延期' }" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.code }}</strong><small>{{ phase.name }}</small></span><span>{{ phase.projectName }}</span><span class="workbench-progress-cell"><i><em :style="{ width: `${phaseProgress(phase)}%` }"></em></i><b>{{ phaseProgress(phase) }}%</b></span><span>{{ phaseTaskCount(phase) }} 项</span><span>{{ phase.owner }}</span><span><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></span></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section>
+      </section>
+
+      <template v-else-if="isProjectManagerRole">
+        <section class="workbench-reference-panel workbench-pending-reference"><header><div><h2>待我处理</h2><span>成员提交的完成申请，确认后任务关闭</span></div><a-button type="text" @click="activeNav = '任务'">全部 {{ dashboardPendingTasks.length }} 条 <IconArrowRise /></a-button></header><div v-for="task in dashboardPendingTasks" :key="task.id" class="workbench-pending-reference-row" role="button" tabindex="0" @click="openTaskFromRow(task)"><span class="workbench-reference-person"><a-avatar :size="28">{{ (task.createdBy || task.owner).slice(0, 1) }}</a-avatar>{{ task.createdBy || task.owner }}</span><span class="workbench-pending-reference-task"><strong>{{ task.title }}</strong><small>{{ phaseByKey(task.phase)?.code || '期号未配置' }} · {{ task.due }} 提交</small></span><span><a-button type="primary" size="small" @click.stop="requestTaskStatusChange(task.id, '已完成')">确认完成</a-button><a-button size="small" @click.stop="requestTaskStatusChange(task.id, '未完成')">退回</a-button></span></div><a-empty v-if="!dashboardPendingTasks.length" description="暂无待确认事项" /></section>
+        <section class="workbench-records workbench-reference-records"><button @click="activeNav = '日报'"><span>今日日报 <i :class="dashboardRecordStats.submitted ? 'ok' : 'alert'"></i></span><strong :class="dashboardRecordStats.submitted ? 'success' : 'danger'">{{ dashboardRecordStats.submitted ? '已提交' : '未提交' }}</strong><small>{{ dashboardRecordStats.latest || '点击去填写' }}</small></button><button @click="activeNav = '工时'"><span>本周工时</span><strong>{{ dashboardRecordStats.hours }}<small>h / 应满 40h</small></strong><small>累计日报工时</small></button><button @click="activeNav = '任务'"><span>待我确认 <i :class="dashboardPendingTasks.length ? 'alert' : 'ok'"></i></span><strong :class="dashboardPendingTasks.length ? 'danger' : 'success'">{{ dashboardPendingTasks.length }}</strong><small>条完成申请</small></button></section>
+        <section class="workbench-reference-duo"><section class="workbench-reference-panel"><header><div><h2>我的今日待办</h2><span>今日到期 + 已逾期</span></div><a-button type="text" @click="activeNav = '任务'">查看全部 <IconArrowRise /></a-button></header><div v-for="task in dashboardTodayTodos.slice(0, 6)" :key="task.id" class="workbench-todo-reference-row" :class="{ 'is-overdue': task.due < dashboardDate }" role="button" tabindex="0" @click="openTaskFromRow(task)"><a-checkbox :model-value="task.status === '已完成'" :indeterminate="task.status === '待确认'" :disabled="!taskChecklistAction(task)" :aria-label="`${task.title}：${taskChecklistLabel(task)}`" @click.stop @change="handleTaskChecklistChange(task)" /><span><strong>{{ task.title }}</strong><small>{{ phaseByKey(task.phase)?.code || '期号未配置' }} · {{ phaseByKey(task.phase)?.name || '' }} · {{ task.due < dashboardDate ? '已逾期' : '今天截止' }}</small></span><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag></div><a-empty v-if="!dashboardTodayTodos.length" description="今日暂无待办" /></section><section class="workbench-reference-panel"><header><div><h2>我参与的期号</h2><span>所辖期号显示全员任务与风险</span></div><a-button type="text" @click="activeNav = '项目'">查看项目 <IconArrowRise /></a-button></header><div class="workbench-phase-reference-list"><button v-for="phase in dashboardPhaseRows" :key="phase.key" :class="{ 'is-overdue': phase.status === '延期' }" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.code }}</strong><small>{{ phase.name }}</small></span><span class="workbench-progress-cell"><i><em :style="{ width: `${phaseProgress(phase)}%` }"></em></i><b>{{ phaseProgress(phase) }}%</b></span><span>{{ phaseTaskCount(phase) }} 项</span><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section></section>
+        <section class="workbench-reference-panel workbench-reference-table-panel"><header><div><h2>我的任务列表</h2><span>与我相关的全部任务 · 可直接处理状态</span></div><a-button type="text" @click="activeNav = '任务'">查看全部 <IconArrowRise /></a-button></header><div class="workbench-reference-table"><div class="workbench-reference-table-row is-heading"><span>优先级</span><span>任务名称</span><span>所属期号</span><span>状态</span><span>截止时间</span><span>操作</span></div><div v-for="task in dashboardTasks" :key="task.id" class="workbench-reference-table-row" :class="{ 'is-overdue': task.due < dashboardDate }" role="button" tabindex="0" @click="openTaskFromRow(task)" @keydown="handleTaskRowKeydown($event, task)"><span><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag></span><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span>{{ phaseByKey(task.phase)?.code || '期号未配置' }}<small>{{ phaseByKey(task.phase)?.name || '' }}</small></span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span :class="{ 'is-danger': task.due < dashboardDate }">{{ taskDueLabel(task) }}</span><span><a-button v-if="task.status !== '已完成'" type="primary" size="small" @click.stop="requestTaskStatusChange(task.id, task.status === '待确认' ? '已完成' : '待确认')">{{ task.status === '待确认' ? '确认完成' : '提交确认' }}</a-button><span v-else class="workbench-muted">已完成</span></span></div><a-empty v-if="!dashboardTasks.length" description="暂无相关任务" /></div></section>
+      </template>
+
+      <template v-else-if="isExternalRole">
+        <section class="workbench-deadline-reference"><IconClockCircle /><span>未来 <b>7 天</b>内有 <b>{{ dashboardTodayTodos.length }}</b> 个任务需要关注，按截止时间优先处理。</span><a-button type="text" @click="activeNav = '任务'">查看任务 <IconArrowRise /></a-button></section>
+        <section class="workbench-records workbench-reference-records workbench-records-compact"><button @click="activeNav = '日报'"><span>今日日报 <i :class="dashboardRecordStats.submitted ? 'ok' : 'alert'"></i></span><strong :class="dashboardRecordStats.submitted ? 'success' : 'danger'">{{ dashboardRecordStats.submitted ? '已提交' : '未提交' }}</strong><small>{{ dashboardRecordStats.latest || '点击去填写' }}</small></button><button @click="activeNav = '工时'"><span>本周工时 <small>（结算依据）</small></span><strong>{{ dashboardRecordStats.hours }}<small>h · 已确认工时记录</small></strong><small>累计日报工时</small></button></section>
+        <section class="workbench-reference-panel workbench-reference-table-panel"><header><div><h2>我的任务</h2><span>按截止时间排序 · 仅显示分配给自己的任务</span></div><a-button type="text" @click="activeNav = '任务'">查看全部 <IconArrowRise /></a-button></header><div class="workbench-reference-table workbench-external-table"><div class="workbench-reference-table-row is-heading"><span>任务名称</span><span>所属项目期号</span><span>截止时间</span><span>状态</span><span>操作</span></div><div v-for="task in dashboardTasks" :key="task.id" class="workbench-reference-table-row" :class="{ 'is-overdue': task.due < dashboardDate }" role="button" tabindex="0" @click="openTaskFromRow(task)" @keydown="handleTaskRowKeydown($event, task)"><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span>{{ phaseByKey(task.phase)?.code || '期号未配置' }}<small>{{ phaseByKey(task.phase)?.name || '' }}</small></span><span :class="{ 'is-danger': task.due < dashboardDate }">{{ taskDueLabel(task) }}</span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span><a-button v-if="task.status !== '已完成'" type="primary" size="small" @click.stop="requestTaskStatusChange(task.id, task.status === '待确认' ? '未完成' : '待确认')">{{ task.status === '待确认' ? '撤回修改' : '提交确认' }}</a-button><span v-else class="workbench-muted">已完成</span></span></div><a-empty v-if="!dashboardTasks.length" description="暂无相关任务" /></div></section>
+      </template>
+
+      <template v-else>
+        <section class="workbench-records workbench-reference-records workbench-records-compact"><button @click="activeNav = '日报'"><span>今日日报 <i :class="dashboardRecordStats.submitted ? 'ok' : 'alert'"></i></span><strong :class="dashboardRecordStats.submitted ? 'success' : 'danger'">{{ dashboardRecordStats.submitted ? '已提交' : '未提交' }}</strong><small>{{ dashboardRecordStats.latest || '点击去填写' }}</small></button><button @click="activeNav = '工时'"><span>本周工时</span><strong>{{ dashboardRecordStats.hours }}<small>h / 应满 40h</small></strong><small>累计日报工时</small></button></section>
+        <section class="workbench-reference-duo"><section class="workbench-reference-panel"><header><div><h2>我的今日待办</h2><span>今日到期 + 已逾期</span></div><a-button type="text" @click="activeNav = '任务'">查看全部 <IconArrowRise /></a-button></header><div v-for="task in dashboardTodayTodos.slice(0, 6)" :key="task.id" class="workbench-todo-reference-row" :class="{ 'is-overdue': task.due < dashboardDate }" role="button" tabindex="0" @click="openTaskFromRow(task)"><a-checkbox :model-value="task.status === '已完成'" :indeterminate="task.status === '待确认'" :disabled="!taskChecklistAction(task)" :aria-label="`${task.title}：${taskChecklistLabel(task)}`" @click.stop @change="handleTaskChecklistChange(task)" /><span><strong>{{ task.title }}</strong><small>{{ phaseByKey(task.phase)?.code || '期号未配置' }} · {{ phaseByKey(task.phase)?.name || '' }} · {{ task.due < dashboardDate ? '已逾期' : '今天截止' }}</small></span><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag></div><a-empty v-if="!dashboardTodayTodos.length" description="今日暂无待办" /></section><section class="workbench-reference-panel"><header><div><h2>我参与的期号</h2><span>仅显示与我相关的期号</span></div><a-button type="text" @click="activeNav = '项目'">查看项目 <IconArrowRise /></a-button></header><div class="workbench-phase-reference-list"><button v-for="phase in dashboardPhaseRows" :key="phase.key" :class="{ 'is-overdue': phase.status === '延期' }" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.code }}</strong><small>{{ phase.name }}</small></span><span class="workbench-progress-cell"><i><em :style="{ width: `${phaseProgress(phase)}%` }"></em></i><b>{{ phaseProgress(phase) }}%</b></span><span>{{ phaseTaskCount(phase) }} 项</span><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section></section>
+        <section class="workbench-reference-panel workbench-reference-table-panel"><header><div><h2>我的任务列表</h2><span>与我相关的全部任务 · 可直接处理状态</span></div><a-button type="text" @click="activeNav = '任务'">查看全部 <IconArrowRise /></a-button></header><div class="workbench-reference-table"><div class="workbench-reference-table-row is-heading"><span>优先级</span><span>任务名称</span><span>所属期号</span><span>状态</span><span>截止时间</span><span>操作</span></div><div v-for="task in dashboardTasks" :key="task.id" class="workbench-reference-table-row" :class="{ 'is-overdue': task.due < dashboardDate }" role="button" tabindex="0" @click="openTaskFromRow(task)" @keydown="handleTaskRowKeydown($event, task)"><span><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag></span><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span>{{ phaseByKey(task.phase)?.code || '期号未配置' }}<small>{{ phaseByKey(task.phase)?.name || '' }}</small></span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span :class="{ 'is-danger': task.due < dashboardDate }">{{ taskDueLabel(task) }}</span><span><a-button v-if="task.status !== '已完成'" type="primary" size="small" @click.stop="requestTaskStatusChange(task.id, task.status === '待确认' ? '已完成' : '待确认')">{{ task.status === '待确认' ? '确认完成' : '提交确认' }}</a-button><span v-else class="workbench-muted">已完成</span></span></div><a-empty v-if="!dashboardTasks.length" description="暂无相关任务" /></div></section>
+      </template>
     </main>
     <main v-else-if="activeNav === '任务'" class="task-page">
       <header class="task-page-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 任务协作</span><h1>任务</h1><p>{{ isManagementRole ? '查看全部任务并按条件快速定位。' : '只显示与你发起、执行或确认相关的任务。' }}</p></div><a-button v-if="canManageTasks" type="primary" @click="openTaskModal"><IconPlus />新建任务</a-button></header>
       <section class="task-page-filters">
         <a-radio-group v-model="taskPageType" type="button"><a-radio value="全部">全部</a-radio><a-radio value="我发起的">我发起的</a-radio><a-radio value="我执行的">我执行的</a-radio><a-radio value="我确认的">我确认的</a-radio></a-radio-group>
-        <a-select v-model="taskPageCategory" aria-label="按任务类型筛选"><a-option value="全部类型">全部类型</a-option><a-option value="项目任务">项目任务</a-option><a-option value="其他任务">其他任务</a-option></a-select>
         <a-select v-model="taskPageStatus" class="task-page-status-filter" aria-label="按任务状态筛选"><a-option value="全部状态">全部状态</a-option><a-option value="未完成">未完成</a-option><a-option value="待确认">待确认</a-option><a-option value="已完成">已完成</a-option></a-select>
         <a-date-picker v-model="taskPageDueDate" value-format="YYYY-MM-DD" format="YYYY-MM-DD" placeholder="截止时间" allow-clear />
         <a-input v-model="taskPageKeyword" class="task-page-search" allow-clear placeholder="搜索期号或任务名称"><template #prefix><IconSearch /></template></a-input>
       </section>
-        <section class="task-page-panel"><header><div><h2>任务列表</h2><span>共 {{ taskPageRows.length }} 项 · 可按权限提交结果或确认完成</span></div></header><div class="task-page-table"><div class="task-page-row task-page-row-heading"><span>处理</span><span>任务名称</span><span>项目期号</span><span>任务类型</span><span>参与角色</span><span>优先级</span><span>状态</span><span>截止时间</span><span>操作</span></div><div v-for="task in taskPageRows" :key="task.id" class="task-page-row" role="button" tabindex="0" :aria-label="`${task.title}，${taskChecklistHint(task)}`" @click="openTaskFromRow(task)" @keydown="handleTaskRowKeydown($event, task)"><span class="task-page-check"><a-tooltip :content="taskChecklistLabel(task)"><a-checkbox :model-value="task.status === '已完成'" :indeterminate="task.status === '待确认'" :disabled="!taskChecklistAction(task)" :aria-label="`${task.title}：${taskChecklistLabel(task)}`" @click.stop @change="handleTaskChecklistChange(task)" /></a-tooltip></span><span data-label="任务名称"><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span v-if="phaseByKey(task.phase)" data-label="项目期号"><strong>{{ phaseByKey(task.phase)?.code }}</strong><small>{{ phaseByKey(task.phase)?.name }}</small></span><span v-else data-label="项目期号"><strong>其他任务</strong><small>不关联项目期号</small></span><span data-label="任务类型"><strong>{{ task.taskType || (task.phase ? '项目任务' : '其他任务') }}</strong></span><span class="task-page-participants" data-label="参与角色"><small>发起：{{ task.createdBy || task.owner }}</small><small>执行：{{ (task.executors || [task.owner]).join('、') }}</small><small>确认：{{ task.confirmer || task.owner }}</small></span><span data-label="优先级"><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag></span><span data-label="状态"><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag><small class="task-status-hint">{{ taskChecklistHint(task) }}</small></span><span data-label="截止时间">{{ task.due }}</span><span class="task-page-actions" data-label="操作"><a-tooltip :content="canEditTask(task) ? '编辑任务' : '无编辑权限'"><a-button type="text" size="small" :disabled="!canEditTask(task)" :aria-label="`编辑任务：${task.title}`" @click.stop="editTaskFromList(task)" @keydown.stop><IconEdit /></a-button></a-tooltip><a-tooltip :content="canDeleteTask(task) ? '删除任务' : '无删除权限'"><a-button type="text" status="danger" size="small" :disabled="!canDeleteTask(task)" :aria-label="`删除任务：${task.title}`" @click.stop="deleteTaskFromList(task)" @keydown.stop><IconDelete /></a-button></a-tooltip></span></div><a-empty v-if="!taskPageRows.length" description="暂无符合条件的任务" /></div></section>
+        <section class="task-page-panel"><header><div><h2>任务列表</h2><span>共 {{ taskPageRows.length }} 项 · 可按权限提交结果或确认完成</span></div></header><div class="task-page-table"><div class="task-page-row task-page-row-heading"><span>处理</span><span>任务名称</span><span>项目期号</span><span>参与角色</span><span>优先级</span><span>状态</span><span>截止时间</span><span>操作</span></div><div v-for="task in taskPageRows" :key="task.id" class="task-page-row" role="button" tabindex="0" :aria-label="`${task.title}，${taskChecklistHint(task)}`" @click="openTaskFromRow(task)" @keydown="handleTaskRowKeydown($event, task)"><span class="task-page-check"><a-tooltip :content="taskChecklistLabel(task)"><a-checkbox :model-value="task.status === '已完成'" :indeterminate="task.status === '待确认'" :disabled="!taskChecklistAction(task)" :aria-label="`${task.title}：${taskChecklistLabel(task)}`" @click.stop @change="handleTaskChecklistChange(task)" /></a-tooltip></span><span data-label="任务名称"><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span v-if="phaseByKey(task.phase)" data-label="项目期号"><strong>{{ phaseByKey(task.phase)?.code }}</strong><small>{{ phaseByKey(task.phase)?.name }}</small></span><span v-else data-label="项目期号"><strong>期号未配置</strong><small>请编辑任务补充项目期号</small></span><span class="task-page-participants" data-label="参与角色"><small>发起：{{ task.createdBy || task.owner }}</small><small>执行：{{ (task.executors || [task.owner]).join('、') }}</small><small>确认：{{ task.confirmer || task.owner }}</small></span><span data-label="优先级"><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag></span><span data-label="状态"><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag><small class="task-status-hint">{{ taskChecklistHint(task) }}</small></span><span data-label="截止时间">{{ task.due }}</span><span class="task-page-actions" data-label="操作"><a-tooltip :content="canEditTask(task) ? '编辑任务' : '无编辑权限'"><a-button type="text" size="small" :disabled="!canEditTask(task)" :aria-label="`编辑任务：${task.title}`" @click.stop="editTaskFromList(task)" @keydown.stop><IconEdit /></a-button></a-tooltip><a-tooltip :content="canDeleteTask(task) ? '删除任务' : '无删除权限'"><a-button type="text" status="danger" size="small" :disabled="!canDeleteTask(task)" :aria-label="`删除任务：${task.title}`" @click.stop="deleteTaskFromList(task)" @keydown.stop><IconDelete /></a-button></a-tooltip></span></div><a-empty v-if="!taskPageRows.length" description="暂无符合条件的任务" /></div></section>
     </main>
     <main v-else-if="activeNav === '日报'" class="daily-page">
       <header class="daily-page-heading">
-        <div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 工作记录</span><h1>日报</h1><p>{{ dailyReportTab === 'mine' ? '查看和回顾自己提交的日报。' : '查看当前权限范围内的团队日报。' }}</p></div>
+        <div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 工作记录</span><h1>日报</h1><p>{{ dailyReportTab === 'mine' ? '查看和回顾自己提交的日报。' : dailyReportTab === 'team' ? '查看当前权限范围内的团队日报。' : '按项目期号查看每天的任务与工时明细。' }}</p></div>
       </header>
-      <section class="daily-tabs" role="tablist"><div class="daily-tab-buttons"><button :class="{ active: dailyReportTab === 'mine' }" role="tab" :aria-selected="dailyReportTab === 'mine'" @click="dailyReportTab = 'mine'">我的日报 <b>{{ dailyReports.filter(report => report.sender === accountProfile.nickname).length }}</b></button><button :class="{ active: dailyReportTab === 'team' }" role="tab" :aria-selected="dailyReportTab === 'team'" @click="dailyReportTab = 'team'">团队日报 <b>{{ dailyReportRows.length }}</b></button></div>
+      <section class="daily-tabs" role="tablist"><div class="daily-tab-buttons"><button :class="{ active: dailyReportTab === 'mine' }" role="tab" :aria-selected="dailyReportTab === 'mine'" @click="dailyReportTab = 'mine'">我的日报 <b>{{ dailyReports.filter(report => report.sender === accountProfile.nickname).length }}</b></button><button :class="{ active: dailyReportTab === 'team' }" role="tab" :aria-selected="dailyReportTab === 'team'" @click="dailyReportTab = 'team'">团队日报 <b>{{ visibleDailyReports.length }}</b></button><button :class="{ active: dailyReportTab === 'detail' }" role="tab" :aria-selected="dailyReportTab === 'detail'" @click="dailyReportTab = 'detail'">日报明细 <b>{{ dailyDetailBaseRows.length }}</b></button></div>
         <a-select v-if="dailyReportTab === 'team'" v-model="dailyReportStatus" class="daily-status-filter"><a-option value="全部状态">全部状态</a-option><a-option v-for="status in ['已发送', '待确认', '已退回', '草稿']" :key="status" :value="status">{{ status }}</a-option></a-select>
         <a-range-picker v-if="dailyReportTab === 'team'" v-model="dailyReportDateRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['发送开始日期', '发送结束日期']" allow-clear />
         <a-select v-if="dailyReportTab === 'team'" v-model="dailyReportUser" allow-search class="daily-user-filter"><a-option value="全部成员">全部成员</a-option><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select>
-        <a-input v-model="dailyReportKeyword" class="daily-report-search" allow-clear placeholder="搜索日报名称"><template #prefix><IconSearch /></template></a-input>
+        <a-select v-if="dailyReportTab === 'detail'" v-model="dailyDetailProject" class="daily-detail-project-filter" allow-search aria-label="按项目筛选"><a-option value="全部项目">全部项目</a-option><a-option v-for="project in dailyDetailProjectOptions" :key="project.value" :value="project.value">{{ project.label }}</a-option></a-select>
+        <a-select v-if="dailyReportTab === 'detail'" v-model="dailyDetailPhase" class="daily-detail-phase-filter" allow-search aria-label="按期号筛选"><a-option value="全部期号">全部期号</a-option><a-option v-for="phase in dailyDetailPhaseOptions" :key="phase.value" :value="phase.value">{{ phase.label }}</a-option></a-select>
+        <a-select v-if="dailyReportTab === 'detail'" v-model="dailyDetailSender" class="daily-detail-sender-filter" allow-search aria-label="按发送人筛选"><a-option value="全部发送人">全部发送人</a-option><a-option v-for="sender in dailyDetailSenderOptions" :key="sender" :value="sender">{{ sender }}</a-option></a-select>
+        <a-input v-if="dailyReportTab !== 'detail'" v-model="dailyReportKeyword" class="daily-report-search" allow-clear placeholder="搜索日报名称"><template #prefix><IconSearch /></template></a-input>
         <a-button v-if="dailyReportTab === 'team' && (dailyReportStatus !== '全部状态' || dailyReportDateRange.length || dailyReportUser !== '全部成员' || dailyReportKeyword)" type="text" @click="dailyReportStatus = '全部状态'; dailyReportDateRange = []; dailyReportUser = '全部成员'; dailyReportKeyword = ''">重置筛选</a-button>
       </section>
-      <section class="daily-page-panel"><header><div><h2>{{ dailyReportTab === 'mine' ? '我的日报' : '团队日报' }}</h2><span>共 {{ dailyReportRows.length }} 份 · 可查看、编辑或删除日报</span></div><a-button v-if="canManageReports" type="primary" size="small" @click="openDailyReportModal()"><IconPlus />发送日报</a-button></header><div class="daily-report-table"><div class="daily-report-row daily-report-row-heading"><span>日报名称</span><span>日报工时</span><span>发送人</span><span>发送时间</span><span>状态</span><span>操作</span></div><div v-for="report in dailyReportRows" :key="report.id" class="daily-report-row" role="button" tabindex="0" @click="openDailyReport(report)" @keydown.enter="openDailyReport(report)" @keydown.space.prevent="openDailyReport(report)"><span data-label="日报名称"><strong>{{ dailyReportDisplayName(report) }}</strong><small>{{ report.id }}</small></span><span data-label="日报工时"><strong>{{ report.hours }}h</strong><small>日报工时</small></span><span data-label="发送人">{{ report.sender }}</span><span data-label="发送时间">{{ report.sentAt }}</span><span data-label="状态"><a-tag :color="dailyReportStatusColors[report.status]">{{ report.status }}</a-tag></span><span class="daily-report-actions" data-label="操作"><a-tooltip content="查看日报"><a-button type="text" size="small" aria-label="查看日报" @click.stop="openDailyReport(report)"><IconEye /></a-button></a-tooltip><template v-if="canManageReports && (isManagementRole || report.sender === accountProfile.nickname)"><a-tooltip content="编辑日报"><a-button type="text" size="small" aria-label="编辑日报" @click.stop="openDailyReportModal(report)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除日报"><a-button type="text" size="small" status="danger" aria-label="删除日报" @click.stop="deleteDailyReport(report)"><IconDelete /></a-button></a-tooltip></template></span></div><a-empty v-if="!dailyReportRows.length" description="暂无符合条件的日报" /></div></section>
+      <section v-if="dailyReportTab !== 'detail'" class="daily-page-panel"><header><div><h2>{{ dailyReportTab === 'mine' ? '我的日报' : '团队日报' }}</h2><span>共 {{ dailyReportRows.length }} 份 · 可查看、编辑或删除日报</span></div><a-button v-if="canManageReports" type="primary" size="small" @click="openDailyReportModal()"><IconPlus />发送日报</a-button></header><div class="daily-report-table"><div class="daily-report-row daily-report-row-heading"><span>日报名称</span><span>日报工时</span><span>发送人</span><span>发送时间</span><span>状态</span><span>操作</span></div><div v-for="report in dailyReportRows" :key="report.id" class="daily-report-row" role="button" tabindex="0" @click="openDailyReport(report)" @keydown.enter="openDailyReport(report)" @keydown.space.prevent="openDailyReport(report)"><span data-label="日报名称"><strong>{{ dailyReportDisplayName(report) }}</strong><small>{{ report.id }}</small></span><span data-label="日报工时"><strong>{{ report.hours }}h</strong><small>日报工时</small></span><span data-label="发送人">{{ report.sender }}</span><span data-label="发送时间">{{ report.sentAt }}</span><span data-label="状态"><a-tag :color="dailyReportStatusColors[report.status]">{{ report.status }}</a-tag></span><span class="daily-report-actions" data-label="操作"><a-tooltip content="查看日报"><a-button type="text" size="small" aria-label="查看日报" @click.stop="openDailyReport(report)"><IconEye /></a-button></a-tooltip><template v-if="canManageReports && (isManagementRole || report.sender === accountProfile.nickname)"><a-tooltip content="编辑日报"><a-button type="text" size="small" aria-label="编辑日报" @click.stop="openDailyReportModal(report)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除日报"><a-button type="text" size="small" status="danger" aria-label="删除日报" @click.stop="deleteDailyReport(report)"><IconDelete /></a-button></a-tooltip></template></span></div><a-empty v-if="!dailyReportRows.length" description="暂无符合条件的日报" /></div></section>
+      <section v-else class="daily-page-panel daily-detail-panel"><header><div><h2>日报明细</h2><span>共 {{ dailyDetailRows.length }} 条任务 · 合计 {{ dailyDetailTotalHours }}h</span></div><a-button v-if="canManageReports" type="primary" size="small" @click="openDailyReportModal()"><IconPlus />发送日报</a-button></header><div class="daily-detail-table"><div class="daily-detail-row daily-detail-row-heading"><span>日期</span><span>项目 / 期号</span><span>任务内容</span><span>工时</span><span>发送人</span><span>发送时间</span></div><div v-for="row in dailyDetailRows" :key="row.id" class="daily-detail-row" role="button" tabindex="0" :aria-label="`${row.date} ${row.phaseLabel} ${row.entry.title}`" @click="openDailyReport(row.report)" @keydown.enter="openDailyReport(row.report)" @keydown.space.prevent="openDailyReport(row.report)"><span data-label="日期"><strong>{{ row.date }}</strong></span><span class="daily-detail-project" data-label="项目 / 期号"><strong>{{ row.projectLabel }}</strong><small>{{ row.phaseLabel }}</small></span><span class="daily-detail-task" data-label="任务内容"><strong>{{ row.entry.title }}</strong><small>{{ row.entry.category }}<template v-if="row.entry.summary"> · 备注：{{ row.entry.summary }}</template></small></span><span data-label="工时"><strong>{{ row.hours }}h</strong></span><span class="daily-detail-sender" data-label="发送人"><a-avatar :size="26">{{ row.sender.slice(0, 1) }}</a-avatar>{{ row.sender }}</span><span data-label="发送时间">{{ row.sentAt }}</span></div><a-empty v-if="!dailyDetailRows.length" description="暂无符合条件的日报明细" /></div></section>
     </main>
     <main v-else-if="activeNav === '工时'" class="work-hours-page">
       <header class="work-hours-heading"><div><span class="workbench-eyebrow">{{ isManagementRole ? '管理视角' : '个人视角' }} · 工时记录</span><h1>工时</h1><p>{{ isManagementRole ? '汇总当前权限范围内的项目期号工时。' : '查看与你相关的项目期号工时记录。' }}</p></div><a-button type="primary" :disabled="!workHoursFilteredLogs.length" @click="exportWorkHours"><IconExport />导出工时</a-button></header>
       <section class="work-hours-stat-grid"><article><span>项目期号数量</span><strong>{{ workHoursStats.phases }}</strong><small>当前筛选范围</small></article><article><span>工时</span><strong>{{ workHoursStats.totalHours }}h</strong><small>筛选后的明细</small></article><article><span>参与成员</span><strong>{{ workHoursStats.members }}</strong><small>有工时记录的成员</small></article><article><span>人均工时</span><strong>{{ workHoursStats.average }}h</strong><small>按参与成员计算</small></article></section>
-      <section class="work-hours-filters"><a-range-picker v-model="workHoursDateRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /><a-select v-model="workHoursMember" class="work-hours-member-filter" allow-search><a-option value="全部成员">全部成员</a-option><a-option v-for="member in workHoursMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-input v-model="workHoursKeyword" class="work-hours-search" allow-clear placeholder="搜索期号名称"><template #prefix><IconSearch /></template></a-input></section>
+      <section class="work-hours-filters"><a-range-picker v-model="workHoursDateRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /><a-select v-model="workHoursProject" class="work-hours-project-filter" allow-search aria-label="按项目筛选工时"><a-option value="全部项目">全部项目</a-option><a-option v-for="project in statsProjectOptions" :key="project.value" :value="project.value">{{ project.label }}</a-option></a-select><a-select v-model="workHoursMember" class="work-hours-member-filter" allow-search aria-label="按成员筛选工时"><a-option value="全部成员">全部成员</a-option><a-option v-for="member in workHoursMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-input v-model="workHoursKeyword" class="work-hours-search" allow-clear placeholder="搜索期号名称"><template #prefix><IconSearch /></template></a-input></section>
       <section class="work-hours-panel"><header><div><h2>期号工时汇总</h2><span>共 {{ workHoursFilteredLogs.length }} 条日报任务 · 按期号汇总显示</span></div></header><div class="work-hours-table"><div class="work-hours-row work-hours-row-heading"><span>期号</span><span>项目 / 期号名称</span><span>登记工时</span><span>成员工时</span><span>最近更新</span></div><button v-for="phase in workHoursPhaseRows" :key="phase.key" class="work-hours-row" @click="openWorkHoursPhaseReports(phase)"><span><strong>{{ phase.code }}</strong><small>{{ phase.status }}</small></span><span><strong>{{ phase.projectName }}</strong><small>{{ phase.name }}</small></span><span><strong>{{ phase.hours }}h</strong><small>{{ phase.logCount }} 条记录</small></span><span class="work-hours-member-breakdown"><template v-if="phase.memberHours.length"><small v-for="member in phase.memberHours" :key="member.name">{{ member.name }} {{ member.hours }}h</small></template><small v-else>暂无记录</small></span><span>{{ phase.latest || '暂无记录' }}</span></button><a-empty v-if="!workHoursPhaseRows.length" description="暂无符合条件的期号" /></div></section>
       <section class="work-hours-panel work-hours-detail-panel"><header><div><h2>工时明细</h2><span>来源于日报任务，点击记录查看完整日报</span></div></header><div class="work-hours-detail-table"><div class="work-hours-detail-row work-hours-detail-row-heading"><span>日期</span><span>期号</span><span>成员</span><span>工时</span><span>工作内容</span></div><button v-for="log in workHoursFilteredLogs" :key="log.id" class="work-hours-detail-row" @click="openWorkHoursDailyReport(log.report)"><span>{{ log.date }}</span><span><strong>{{ log.phase?.code }}</strong><small>{{ log.phase?.name }}</small></span><span>{{ log.member }}</span><strong>{{ log.hours }}h</strong><span>{{ log.content }}</span></button><a-empty v-if="!workHoursFilteredLogs.length" description="暂无符合条件的工时记录" /></div></section>
     </main>
@@ -2319,24 +2800,214 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       <section class="statistics-panel statistics-team-panel"><header><div><h2>团队负载</h2><span>按任务参与关系与日报登记工时汇总</span></div><b>{{ statsMemberRows.length }} 人</b></header><div class="statistics-table statistics-member-table"><div class="statistics-table-row statistics-table-heading"><span>成员</span><span>任务分布</span><span>完成率</span><span>登记工时</span><span>逾期任务</span></div><div v-for="row in statsMemberRows" :key="row.name" class="statistics-table-row"><span class="statistics-member-identity"><a-avatar :size="30">{{ row.name.slice(0, 1) }}</a-avatar><strong>{{ row.name }}</strong></span><span><strong>{{ row.tasks }} 项</strong><small>已完成 {{ row.completed }} 项</small></span><span class="statistics-member-progress"><i><em :style="{ width: `${row.completionRate}%` }"></em></i><b>{{ row.completionRate }}%</b></span><span><strong>{{ row.hours }}h</strong><small>日报任务工时</small></span><span><a-tag v-if="row.overdue" color="red">{{ row.overdue }} 项</a-tag><span v-else class="statistics-zero-value">0 项</span></span></div><a-empty v-if="!statsMemberRows.length" description="暂无成员负载数据" /></div></section>
     </main>
     <div v-else class="project-layout">
-      <aside class="project-navigator">
-        <div class="navigator-heading"><h1>客户 / 项目 + 期号</h1><a-radio-group class="project-view-control" type="button" size="small" v-model="projectView"><a-radio value="tree" title="项目树" aria-label="项目树"><IconMindMapping /></a-radio><a-radio value="list" title="列表" aria-label="列表"><IconList /></a-radio></a-radio-group></div>
-        <div class="navigator-search"><a-input v-model="navigatorKeyword" allow-clear placeholder="搜索客户、项目或期号"><template #prefix><IconSearch /></template></a-input></div>
-        <div class="navigator-body" :class="{ 'customer-collapsed': customerCollapsed }">
-          <section class="customer-panel" :class="{ 'customer-panel-collapsed': customerCollapsed }">
-            <template v-if="customerCollapsed"><a-tooltip content="展开客户栏"><a-button class="customer-panel-toggle customer-expand-button" type="text" @click="customerCollapsed = false"><IconMenuUnfold /></a-button></a-tooltip><span class="customer-collapsed-label">客户</span></template>
-            <template v-else><div class="subpanel-heading"><h2>客户</h2><a-tooltip content="收起客户栏"><a-button class="customer-panel-toggle" type="text" @click="customerCollapsed = true"><IconMenuFold /></a-button></a-tooltip></div><div class="customer-list"><button v-for="customer in visibleCustomers" :key="customer.key" :class="{ active: selectedCustomerKey === customer.key }" :title="`${customer.code}-${customer.name}`" @click="selectCustomer(customer)"><strong>{{ customer.code }}-{{ customer.name }}</strong><em>{{ customerPhaseCount(customer) }}</em></button><a-empty v-if="!visibleCustomers.length" description="没有匹配的客户" /></div></template>
-          </section>
-          <section class="project-sidebar"><div class="subpanel-heading"><h2>项目 + 期号</h2><a-tooltip content="添加项目或期号"><a-button class="project-add-button" type="text" aria-label="添加项目或期号" @click="openProjectCreateModal"><IconPlus /></a-button></a-tooltip></div><section class="quick-section"><header><h2>快速入口</h2></header><button v-for="key in recentPhaseKeys" :key="key" :class="{ active: selectedPhaseKey === key }" @click="selectedPhaseKey = key"><IconClockCircle /><span><strong>{{ phaseByKey(key)?.code }}　{{ phaseByKey(key)?.name }}</strong><small>最近打开 · {{ phaseByKey(key)?.projectName }}</small></span></button></section><div class="project-status-tabs"><button v-for="(count, status) in customerStatusCounts" :key="status" :class="{ active: phaseStatus === status }" @click="phaseStatus = status">{{ status === '全部状态' ? '全部' : status }}<b>{{ count }}</b></button></div><a-tree v-if="projectView === 'tree'" class="tree-section" :data="treeData" :expanded-keys="expandedKeys" :selected-keys="[selectedPhaseKey]" block-node show-line @expand="keys => expandedKeys = keys" @select="onTreeSelect"><template #title="node"><div v-if="node.nodeType === 'project'" class="tree-project-title"><IconFolder /><span><b>{{ node.code }}</b>{{ node.name }}</span><a-dropdown trigger="click" @select="action => openTreeNodeMenu(node, action)"><a-button class="tree-node-more" type="text" size="mini" aria-label="项目更多操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit"><IconEdit />编辑项目</a-doption><a-doption value="delete" class="tree-danger-option"><IconDelete />删除项目</a-doption></template></a-dropdown></div><div v-else class="tree-phase-title"><div class="tree-phase-main"><span class="tree-phase-code">{{ node.code }}</span><span class="tree-phase-name">{{ node.name }}</span><a-dropdown trigger="click" @select="action => openTreeNodeMenu(node, action)"><a-button class="tree-node-more" type="text" size="mini" aria-label="期号更多操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit"><IconEdit />编辑期号</a-doption><a-doption value="delete" class="tree-danger-option"><IconDelete />删除期号</a-doption></template></a-dropdown></div><div class="tree-phase-meta"><span>负责人：{{ node.owner }}</span><a-tag :color="phaseStatusColor(node.status)">{{ node.status }}</a-tag></div></div></template></a-tree><section v-else class="phase-list-section"><div v-for="group in phaseListGroups" :key="group.key" class="phase-list-group"><header class="phase-list-project-header"><span class="phase-list-project-identity"><IconFolder /><span><strong><b>{{ group.customerCode }}-{{ group.projectCode }}</b>{{ group.projectName }}</strong><small>项目负责人：{{ group.projectOwner }}</small></span></span><a-dropdown trigger="click" @select="action => openPhaseListProjectMenu(group, action)"><a-button class="phase-list-project-more" type="text" size="mini" aria-label="项目操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit-project"><IconEdit />编辑项目</a-doption><a-doption value="delete-project" class="tree-danger-option"><IconDelete />删除项目</a-doption></template></a-dropdown></header><div class="phase-list-items"><div v-for="phase in group.phases" :key="phase.key" class="phase-list-card" :class="{ active: phase.key === selectedPhaseKey }" role="button" tabindex="0" @click="selectPhase(phase)"><div class="phase-list-main"><div class="phase-list-phase"><span class="phase-list-code">{{ phase.code }}</span><strong>{{ phase.name }}</strong></div><div class="phase-list-meta"><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag><span>期号负责人：{{ phase.owner }}</span></div></div><a-dropdown trigger="click" @select="action => openPhaseListMenu(phase, action)"><a-button class="phase-list-more" type="text" size="mini" aria-label="期号操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit-phase"><IconEdit />编辑期号</a-doption><a-doption value="delete-phase" class="tree-danger-option"><IconDelete />删除期号</a-doption></template></a-dropdown></div></div></div><a-empty v-if="!phaseListGroups.length" description="没有匹配的期号" /></section></section>
+      <div class="sidebar">
+        <div class="sb-title">
+          <b>客户 / 项目 + 期号</b>
+          <div class="sidebar-title-actions">
+            <a-tooltip :content="phaseStatus === '全部状态' ? '筛选期号状态' : `当前筛选：${phaseStatus}`">
+              <a-dropdown trigger="click" @select="status => phaseStatus = status">
+                <a-button class="sidebar-icon-button" :class="{ active: phaseStatus !== '全部状态' }" type="text" size="mini" :aria-label="`筛选期号状态，当前${phaseStatus === '全部状态' ? '全部' : phaseStatus}`"><IconFilter /></a-button>
+                <template #content>
+                  <a-doption v-for="(count, status) in customerStatusCounts" :key="status" :value="status">
+                    <span class="sidebar-status-option" :class="{ active: phaseStatus === status }"><IconCheckCircle v-if="phaseStatus === status" /><span v-else class="sidebar-status-option-placeholder"></span><span>{{ status === '全部状态' ? '全部状态' : status }}</span><b>{{ count }}</b></span>
+                  </a-doption>
+                </template>
+              </a-dropdown>
+            </a-tooltip>
+            <a-tooltip content="添加项目或期号"><a-button class="sidebar-icon-button" type="text" size="mini" aria-label="添加项目或期号" @click="openProjectCreateModal"><IconPlus /></a-button></a-tooltip>
+          </div>
         </div>
-      </aside>
+        <div class="sb-search"><IconSearch /><input v-model="navigatorKeyword" placeholder="搜索客户、项目或期号"><button v-if="navigatorKeyword" class="sb-search-clear" type="button" aria-label="清空搜索" @click="navigatorKeyword = ''"><IconClose /></button></div>
+        <div class="sb-cols">
+          <div class="sb-col-customer">
+            <div v-for="customer in visibleCustomers" :key="customer.key" class="cust-item" :class="{ active: selectedCustomerKey === customer.key }" :title="`${customer.code}-${customer.name}`" @click="selectCustomer(customer)"><span class="no">{{ customer.code }}-</span><span class="customer-name">{{ customer.name }}</span></div>
+            <div v-if="!visibleCustomers.length" class="tree-empty">没有匹配的客户</div>
+          </div>
+          <div class="sb-col-tree">
+            <template v-if="projectView === 'tree'">
+              <template v-for="customer in filteredProjects" :key="customer.key">
+                <template v-for="project in customer.projects" :key="project.key">
+                  <div class="tree-folder"><IconFolder class="tree-folder-icon" /><span class="tnode">{{ project.code }} {{ project.name }}</span> <span class="cnt">({{ project.phases.length }})</span><span class="tree-ops"><i title="编辑项目" @click.stop="openProjectEdit(project)"><IconEdit /></i><i class="del" title="删除项目" @click.stop="removeProject(project)"><IconDelete /></i></span></div>
+                  <div class="tree-phase">
+                    <div v-for="phase in project.phases" :key="phase.key" class="phase-item" :class="{ active: phase.key === selectedPhaseKey }" @click="selectedPhaseKey = phase.key"><span class="dot" :class="dotCls(phase.status)"></span><span class="pno">{{ phase.code }}</span><span class="tnode">{{ phase.name }}</span><span class="tree-ops"><i title="编辑期号" @click.stop="openPhaseEdit(phase)"><IconEdit /></i><i class="del" title="删除期号" @click.stop="removePhase(phase)"><IconDelete /></i></span></div>
+                  </div>
+                </template>
+              </template>
+              <div v-if="!filteredProjects.length" class="tree-empty">{{ phaseStatus === '全部状态' ? '没有匹配的项目' : `没有${phaseStatus}的期号` }}<template v-if="phaseStatus === '全部状态' && !normalizedKeyword && customerStatusCounts['全部状态'] === 0"><br><b class="tree-empty-action" @click="openProjectCreateModal"><IconPlus />新建第一个项目</b></template></div>
+            </template>
+            <section v-else class="phase-list-section"><div v-for="group in phaseListGroups" :key="group.key" class="phase-list-group"><header class="phase-list-project-header"><span class="phase-list-project-identity"><IconFolder /><span><strong><b>{{ group.customerCode }}-{{ group.projectCode }}</b>{{ group.projectName }}</strong><small>项目负责人：{{ group.projectOwner }}</small></span></span><a-dropdown trigger="click" @select="action => openPhaseListProjectMenu(group, action)"><a-button class="phase-list-project-more" type="text" size="mini" aria-label="项目操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit-project"><IconEdit />编辑项目</a-doption><a-doption value="delete-project" class="tree-danger-option"><IconDelete />删除项目</a-doption></template></a-dropdown></header><div class="phase-list-items"><div v-for="phase in group.phases" :key="phase.key" class="phase-list-card" :class="{ active: phase.key === selectedPhaseKey }" role="button" tabindex="0" @click="selectPhase(phase)"><div class="phase-list-main"><div class="phase-list-phase"><span class="phase-list-code">{{ phase.code }}</span><strong>{{ phase.name }}</strong></div><div class="phase-list-meta"><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag><span>期号负责人：{{ phase.owner }}</span></div></div><a-dropdown trigger="click" @select="action => openPhaseListMenu(phase, action)"><a-button class="phase-list-more" type="text" size="mini" aria-label="期号操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit-phase"><IconEdit />编辑期号</a-doption><a-doption value="delete-phase" class="tree-danger-option"><IconDelete />删除期号</a-doption></template></a-dropdown></div></div></div><a-empty v-if="!phaseListGroups.length" description="没有匹配的期号" /></section>
+          </div>
+        </div>
+      </div>
 
-      <main class="task-workspace">
-        <section class="phase-header"><div class="phase-identity"><div class="phase-copy"><div class="phase-title-row"><h2>{{ selectedPhase.name }}</h2><a-tag :color="phaseStatusColor(selectedPhase.status)">{{ selectedPhase.status }}</a-tag></div><p>{{ selectedPhase.code }} · {{ selectedPhase.projectName }}</p><div class="phase-meta"><span><IconCalendar />{{ selectedPhase.dates }}</span><span><IconUserGroup />负责人：{{ selectedPhase.owner }}</span></div></div></div><a-tooltip content="期号设置"><a-button class="phase-settings-button" aria-label="期号设置" @click="openPhaseSettings"><IconSettings /></a-button></a-tooltip></section>
-        <section class="task-control-bar"><a-radio-group class="task-view-switch" type="button" size="small" v-model="taskView"><a-radio value="list"><IconList />任务列表</a-radio><a-radio value="board"><IconApps />看板视图</a-radio></a-radio-group><div class="task-tools"><a-input v-model="taskKeyword" allow-clear placeholder="搜索任务名称"><template #prefix><IconSearch /></template></a-input><a-select v-model="statusFilter" :style="{ width: '118px' }"><a-option v-for="status in statusOptions" :key="status" :value="status">{{ status }}</a-option></a-select><a-date-picker v-model="dueDateFilter" class="task-due-filter" format="YYYY-MM-DD" value-format="YYYY-MM-DD" placeholder="截止时间" allow-clear /><a-button type="primary" @click="taskView === 'list' ? openTaskModal() : openLaneModal()"><IconPlus />{{ taskView === 'list' ? '新建任务' : '添加列' }}</a-button><a-dropdown trigger="click"><a-button class="workspace-more-button"><IconMore />更多</a-button><template #content><a-menu class="workspace-more-menu" @menu-item-click="openWorkspaceMore"><a-menu-item key="import"><IconImport />导入任务</a-menu-item><a-menu-item key="template"><IconFile />下载导入模板</a-menu-item><a-menu-item key="export"><IconExport />{{ taskView === 'list' ? '导出任务' : '导出看板' }}</a-menu-item></a-menu></template></a-dropdown></div><input ref="taskImportInput" class="task-import-input" type="file" accept=".csv,text/csv" @change="importTasks" /></section>
-        <section v-if="taskView === 'list'" class="task-list-section"><div class="table-frame"><a-table row-key="id" :columns="columns" :data="visibleTasks" :pagination="{ pageSize: 8, sizeCanChange: false }" @row-click="onTaskRowClick"><template #checklist="{ record }"><a-checkbox :model-value="record.status === '已完成'" :indeterminate="record.status === '待确认'" :disabled="!taskChecklistAction(record)" :aria-label="`${record.title}完成状态`" @click.stop @change="handleTaskChecklistChange(record)" /></template><template #title="{ record }"><div class="task-title-cell"><strong>{{ record.title }}</strong><small>{{ record.id }} · {{ record.module }}</small></div></template><template #priority="{ record }"><a-tag :color="priorityColors[record.priority]">{{ record.priority }}</a-tag></template><template #owner="{ record }"><span class="owner-cell"><a-avatar :size="26">{{ record.owner.slice(0, 1) }}</a-avatar>{{ record.owner }}</span></template><template #status="{ record }"><a-tag :color="phaseStatusColor(record.status)">{{ record.status }}</a-tag></template><template #actions="{ record }"><a-button type="text" size="small" @click.stop="onTaskRowClick(record)"><IconMore /></a-button></template></a-table></div></section>
-        <section v-else class="task-board-wrapper"><div class="task-board-section"><div v-for="lane in boardLanes" :key="lane.key" class="task-board-lane"><header draggable="true" @dragstart="startLaneDrag(lane, $event)" @dragover.prevent @drop="dropLane(lane, $event)"><span class="task-board-lane-title"><a-tag :color="lane.color">{{ lane.title }}</a-tag><b>{{ orderedBoardTasks(lane).length }}</b></span><span class="task-board-lane-actions"><a-tooltip content="编辑列"><a-button type="text" size="mini" @click.stop="openLaneModal(lane)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除列"><a-button type="text" size="mini" @click.stop="deleteLane(lane)"><IconDelete /></a-button></a-tooltip></span></header><div class="task-board-cards" @dragover.prevent @drop="dropTaskOnLane(lane, $event)"><button v-for="task in orderedBoardTasks(lane)" :key="task.id" class="task-board-card" draggable="true" @dragstart.stop="startTaskDrag(task, $event)" @dragover.prevent @drop="dropTaskBefore(task, lane, $event)" @click="onTaskRowClick(task)"><div class="task-board-card-top"><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag><span>{{ task.due }}</span></div><strong>{{ task.title }}</strong><small>{{ task.id }}</small><footer><span><a-avatar :size="22">{{ task.owner.slice(0, 1) }}</a-avatar>{{ task.owner }}</span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></footer></button><a-empty v-if="!orderedBoardTasks(lane).length" description="暂无任务" /></div></div></div></section>
-      </main>
+      <div class="main" @click="paMenuOpen = ''">
+        <!-- 项目头 -->
+        <div class="proj-head" style="cursor:default;">
+          <div style="min-width:0;">
+            <h1>{{ selectedPhase.name }} <span class="tag-status" :class="{ 'tag-st-wait': selectedPhase.status === '未开始', 'tag-st-delay': selectedPhase.status === '延期', 'tag-st-done': selectedPhase.status === '已完成' }">{{ selectedPhase.status }}</span></h1>
+            <div class="proj-meta">
+              <span class="grey">{{ selectedPhase.code }} · {{ selectedPhase.projectName }}</span><span class="sep">|</span>
+              <span>周期 {{ selectedPhase.dates }}</span><span class="sep">|</span>
+              <span>负责人 {{ selectedPhase.owner }}</span><span class="sep">|</span><span>未完成任务 {{ phaseTaskStats.total - phaseTaskStats.completed }}</span>
+            </div>
+          </div>
+          <span class="gear" title="期号设置" @click.stop="openPhaseSettings"><IconSettings /></span>
+        </div>
+
+        <!-- ▍最近文件 -->
+        <div class="panel pa-files">
+          <template v-if="fileViewMode === 'brief'">
+            <div class="panel-hd file-panel-toolbar">
+              <span class="ttl"><i class="bar-mark"></i>最近文件 <span class="cnt-grey">(共 {{ currentPhaseFiles.length }})</span></span>
+              <span class="hd-spacer"></span>
+              <div class="search-box"><IconSearch /><input v-model="phaseFileKeyword" placeholder="搜索文件名或内容"><button v-if="phaseFileKeyword" class="search-box-clear" type="button" aria-label="清空文件搜索" @click="phaseFileKeyword = ''"><IconClose /></button></div>
+              <div class="file-create-actions">
+                <button class="btn-secondary" @click="openPhaseFileModal"><IconUpload />上传文件</button>
+                <a-dropdown trigger="click" @select="openPhaseOnlineFileEditor"><button class="btn-primary"><IconPlus />新建<IconDown class="button-caret" /></button><template #content><a-doption value="DOCX"><span class="phase-file-create-option"><IconFile /><span><b>在线文档</b><small>适合方案与说明</small></span></span></a-doption><a-doption value="XLSX"><span class="phase-file-create-option"><IconBarChart /><span><b>在线表格</b><small>适合清单与数据</small></span></span></a-doption><a-doption value="PPTX"><span class="phase-file-create-option"><IconLayout /><span><b>在线演示文稿</b><small>适合汇报与评审</small></span></span></a-doption></template></a-dropdown>
+              </div>
+            </div>
+            <div class="file-brief">
+              <div v-if="currentPhaseFiles.length" class="frow file-brief-heading">
+                <span class="file-icon-heading"></span>
+                <span class="fname"><button class="task-sort-button" :class="{ active: phaseFileSortBy === '文件名' }" :aria-label="`按文件名${phaseFileSortBy === '文件名' && phaseFileSortDirection === 'asc' ? '降序' : '升序'}排列`" @click="togglePhaseFileSort('文件名')">文件名<span class="task-sort-icons"><IconUp :class="{ on: phaseFileSortBy === '文件名' && phaseFileSortDirection === 'asc' }" /><IconDown :class="{ on: phaseFileSortBy === '文件名' && phaseFileSortDirection === 'desc' }" /></span></button></span>
+                <span class="file-source-cell"><button class="task-sort-button" :class="{ active: phaseFileSortBy === '文件类型' }" :aria-label="`按文件类型${phaseFileSortBy === '文件类型' && phaseFileSortDirection === 'asc' ? '降序' : '升序'}排列`" @click="togglePhaseFileSort('文件类型')">文件类型<span class="task-sort-icons"><IconUp :class="{ on: phaseFileSortBy === '文件类型' && phaseFileSortDirection === 'asc' }" /><IconDown :class="{ on: phaseFileSortBy === '文件类型' && phaseFileSortDirection === 'desc' }" /></span></button></span>
+                <span class="file-updater"><button class="task-sort-button" :class="{ active: phaseFileSortBy === '更新人' }" :aria-label="`按更新人${phaseFileSortBy === '更新人' && phaseFileSortDirection === 'asc' ? '降序' : '升序'}排列`" @click="togglePhaseFileSort('更新人')">更新人<span class="task-sort-icons"><IconUp :class="{ on: phaseFileSortBy === '更新人' && phaseFileSortDirection === 'asc' }" /><IconDown :class="{ on: phaseFileSortBy === '更新人' && phaseFileSortDirection === 'desc' }" /></span></button></span>
+                <span class="file-updated-at"><button class="task-sort-button" :class="{ active: phaseFileSortBy === '更新时间' }" :aria-label="`按更新时间${phaseFileSortBy === '更新时间' && phaseFileSortDirection === 'asc' ? '降序' : '升序'}排列`" @click="togglePhaseFileSort('更新时间')">更新时间<span class="task-sort-icons"><IconUp :class="{ on: phaseFileSortBy === '更新时间' && phaseFileSortDirection === 'asc' }" /><IconDown :class="{ on: phaseFileSortBy === '更新时间' && phaseFileSortDirection === 'desc' }" /></span></button></span>
+                <span class="ops">操作</span>
+              </div>
+              <div v-for="file in briefPhaseFiles" :key="file.id" class="frow">
+                <span class="file-icon" :class="fileIconCls(file.type)">{{ fileIconTxt(file.type) }}</span>
+                <span class="fname"><b>{{ file.name }}</b></span>
+                <span class="file-source-cell"><span class="file-source-tag" :class="{ online: file.online }">{{ file.online ? '在线文件' : '上传文件' }}</span></span>
+                <span class="file-updater">{{ file.updatedBy || selectedPhase.owner }}</span>
+                <span class="file-updated-at">{{ file.updated }}</span>
+                <span class="ops">
+                  <template v-if="file.online">
+                    <a class="op" @click="previewPhaseFile(file)">查看</a>
+                    <a class="op" @click="openPhaseFileEdit(file)">编辑</a>
+                    <a class="op" @click="exportPhaseOnlineFile(file)">导出</a>
+                  </template>
+                  <template v-else>
+                    <a class="op" @click="previewPhaseFile(file)">预览</a>
+                    <a class="op" @click="downloadPhaseFile(file)">下载</a>
+                  </template>
+                  <a class="op op-danger" @click="removePhaseFile(file)">删除</a>
+                </span>
+              </div>
+              <div v-if="!currentPhaseFiles.length" class="tree-empty">还没有文件，上传或新建第一个</div>
+              <span v-if="currentPhaseFiles.length > briefPhaseFiles.length" class="see-all file-view-toggle" role="button" tabindex="0" aria-expanded="false" @click="toggleFileView" @keydown.enter="toggleFileView" @keydown.space.prevent="toggleFileView">查看全部文件 <IconDown /></span>
+            </div>
+          </template>
+          <template v-else>
+            <div class="panel-hd file-panel-toolbar">
+              <span class="ttl"><i class="bar-mark"></i>全部文件 <span class="cnt-grey">(共 {{ currentPhaseFiles.length }})</span></span>
+              <span class="hd-spacer"></span>
+              <div class="search-box"><IconSearch /><input v-model="phaseFileKeyword" placeholder="搜索文件名或内容"><button v-if="phaseFileKeyword" class="search-box-clear" type="button" aria-label="清空文件搜索" @click="phaseFileKeyword = ''"><IconClose /></button></div>
+              <span class="filter-select" @click.stop="paMenuOpen = paMenuOpen === 'ftype' ? '' : 'ftype'">类型：{{ phaseFileTypeFilter }} <span v-if="paMenuOpen === 'ftype'" class="fs-menu"><span v-for="type in phaseFileTypeOptions" :key="type" class="fs-item" :class="{ on: type === phaseFileTypeFilter }" @click.stop="phaseFileTypeFilter = type; paMenuOpen = ''">{{ type }}</span></span><IconDown class="caret" /></span>
+              <div class="file-create-actions">
+                <button class="btn-secondary" @click="openPhaseFileModal"><IconUpload />上传文件</button>
+                <a-dropdown trigger="click" @select="openPhaseOnlineFileEditor"><button class="btn-primary"><IconPlus />新建<IconDown class="button-caret" /></button><template #content><a-doption value="DOCX"><span class="phase-file-create-option"><IconFile /><span><b>在线文档</b><small>适合方案与说明</small></span></span></a-doption><a-doption value="XLSX"><span class="phase-file-create-option"><IconBarChart /><span><b>在线表格</b><small>适合清单与数据</small></span></span></a-doption><a-doption value="PPTX"><span class="phase-file-create-option"><IconLayout /><span><b>在线演示文稿</b><small>适合汇报与评审</small></span></span></a-doption></template></a-dropdown>
+              </div>
+            </div>
+            <table class="file-full-table">
+              <colgroup><col><col class="file-source-column"><col class="file-updater-column"><col class="file-updated-column"><col class="file-actions-column"></colgroup>
+              <thead><tr>
+                <th><button class="task-sort-button" :class="{ active: phaseFileSortBy === '文件名' }" :aria-label="`按文件名${phaseFileSortBy === '文件名' && phaseFileSortDirection === 'asc' ? '降序' : '升序'}排列`" @click="togglePhaseFileSort('文件名')">文件名<span class="task-sort-icons"><IconUp :class="{ on: phaseFileSortBy === '文件名' && phaseFileSortDirection === 'asc' }" /><IconDown :class="{ on: phaseFileSortBy === '文件名' && phaseFileSortDirection === 'desc' }" /></span></button></th>
+                <th><button class="task-sort-button" :class="{ active: phaseFileSortBy === '文件类型' }" :aria-label="`按文件类型${phaseFileSortBy === '文件类型' && phaseFileSortDirection === 'asc' ? '降序' : '升序'}排列`" @click="togglePhaseFileSort('文件类型')">文件类型<span class="task-sort-icons"><IconUp :class="{ on: phaseFileSortBy === '文件类型' && phaseFileSortDirection === 'asc' }" /><IconDown :class="{ on: phaseFileSortBy === '文件类型' && phaseFileSortDirection === 'desc' }" /></span></button></th>
+                <th><button class="task-sort-button" :class="{ active: phaseFileSortBy === '更新人' }" :aria-label="`按更新人${phaseFileSortBy === '更新人' && phaseFileSortDirection === 'asc' ? '降序' : '升序'}排列`" @click="togglePhaseFileSort('更新人')">更新人<span class="task-sort-icons"><IconUp :class="{ on: phaseFileSortBy === '更新人' && phaseFileSortDirection === 'asc' }" /><IconDown :class="{ on: phaseFileSortBy === '更新人' && phaseFileSortDirection === 'desc' }" /></span></button></th>
+                <th><button class="task-sort-button" :class="{ active: phaseFileSortBy === '更新时间' }" :aria-label="`按更新时间${phaseFileSortBy === '更新时间' && phaseFileSortDirection === 'asc' ? '降序' : '升序'}排列`" @click="togglePhaseFileSort('更新时间')">更新时间<span class="task-sort-icons"><IconUp :class="{ on: phaseFileSortBy === '更新时间' && phaseFileSortDirection === 'asc' }" /><IconDown :class="{ on: phaseFileSortBy === '更新时间' && phaseFileSortDirection === 'desc' }" /></span></button></th>
+                <th>操作</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="file in visiblePhaseFiles" :key="file.id">
+                  <td><span class="file-icon" :class="fileIconCls(file.type)">{{ fileIconTxt(file.type) }}</span><span class="fname-text"><span class="cell-main">{{ file.name }}</span><small class="sub2">{{ file.type }} · {{ file.size }}</small></span></td>
+                  <td><span class="file-source-tag" :class="{ online: file.online }">{{ file.online ? '在线文件' : '上传文件' }}</span></td>
+                  <td class="nowrap">{{ file.updatedBy || selectedPhase.owner }}</td>
+                  <td class="grey nowrap">{{ file.updated }}</td>
+                  <td class="op-cell nowrap"><span class="file-table-actions"><template v-if="file.online"><a class="op" @click="previewPhaseFile(file)">查看</a><a class="op" @click="openPhaseFileEdit(file)">编辑</a><a class="op" @click="exportPhaseOnlineFile(file)">导出</a></template><template v-else><a class="op" @click="previewPhaseFile(file)">预览</a><a class="op" @click="downloadPhaseFile(file)">下载</a></template><a class="op op-danger" @click="removePhaseFile(file)">删除</a></span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="!visiblePhaseFiles.length" class="tree-empty">暂无匹配文件</div>
+            <span class="see-all file-view-toggle" role="button" tabindex="0" aria-expanded="true" @click="toggleFileView" @keydown.enter="toggleFileView" @keydown.space.prevent="toggleFileView">收起文件 <IconUp /></span>
+          </template>
+        </div>
+
+        <!-- ▍任务列表 -->
+        <div class="panel pa-tasks">
+          <div class="panel-hd task-panel-toolbar">
+            <div class="tabs">
+              <span class="tab" :class="{ active: taskView === 'list' }" @click="taskView = 'list'">任务列表</span>
+              <span class="tab" :class="{ active: taskView === 'board' }" @click="taskView = 'board'">看板视图</span>
+            </div>
+            <span class="hd-spacer"></span>
+            <div class="search-box" style="min-width:150px;"><IconSearch /><input v-model="taskKeyword" placeholder="搜索任务名称"><button v-if="taskKeyword" class="search-box-clear" type="button" aria-label="清空任务搜索" @click="taskKeyword = ''"><IconClose /></button></div>
+            <span class="filter-select" @click.stop="paMenuOpen = paMenuOpen === 'status' ? '' : 'status'">{{ statusFilter === '全部状态' ? '全部状态' : statusFilter }}<button v-if="statusFilter !== '全部状态'" class="filter-select-clear" type="button" aria-label="清除状态筛选" @click.stop="statusFilter = '全部状态'; paMenuOpen = ''"><IconClose /></button><IconDown v-else class="caret" />
+              <span v-if="paMenuOpen === 'status'" class="fs-menu"><span v-for="status in statusOptions" :key="status" class="fs-item" :class="{ on: status === statusFilter }" @click.stop="statusFilter = status; paMenuOpen = ''">{{ status }}</span></span>
+            </span>
+            <a-date-picker v-model="dueDateFilter" class="task-due-date-filter" size="small" format="YYYY-MM-DD" value-format="YYYY-MM-DD" placeholder="截止时间" allow-clear />
+            <button class="btn-primary" @click="taskView === 'list' ? openTaskModal() : openLaneModal()"><IconPlus />新建任务</button>
+            <a-dropdown trigger="click"><span class="filter-select more-btn" @click.stop><IconMore /></span><template #content><a-menu class="workspace-more-menu" @menu-item-click="openWorkspaceMore"><a-menu-item key="import"><IconImport />导入任务</a-menu-item><a-menu-item key="template"><IconFile />下载导入模板</a-menu-item><a-menu-item key="export"><IconExport />导出任务</a-menu-item></a-menu></template></a-dropdown>
+          </div>
+          <div v-if="taskView === 'list'" class="task-table-wrap">
+            <div class="task-table-scroll">
+              <table>
+                <thead><tr>
+                  <th style="width:36px;"></th>
+                  <th><button class="task-sort-button" :class="{ active: sortBy === '任务名称' }" :aria-label="`按任务名称${sortBy === '任务名称' && sortDirection === 'asc' ? '降序' : '升序'}排列`" @click="toggleTaskSort('任务名称')">任务名称<span class="task-sort-icons"><IconUp :class="{ on: sortBy === '任务名称' && sortDirection === 'asc' }" /><IconDown :class="{ on: sortBy === '任务名称' && sortDirection === 'desc' }" /></span></button></th>
+                  <th style="width:76px;"><button class="task-sort-button" :class="{ active: sortBy === '优先级' }" :aria-label="`按优先级${sortBy === '优先级' && sortDirection === 'asc' ? '降序' : '升序'}排列`" @click="toggleTaskSort('优先级')">优先级<span class="task-sort-icons"><IconUp :class="{ on: sortBy === '优先级' && sortDirection === 'asc' }" /><IconDown :class="{ on: sortBy === '优先级' && sortDirection === 'desc' }" /></span></button></th>
+                  <th style="width:84px;"><button class="task-sort-button" :class="{ active: sortBy === '执行人' }" :aria-label="`按执行人${sortBy === '执行人' && sortDirection === 'asc' ? '降序' : '升序'}排列`" @click="toggleTaskSort('执行人')">执行人<span class="task-sort-icons"><IconUp :class="{ on: sortBy === '执行人' && sortDirection === 'asc' }" /><IconDown :class="{ on: sortBy === '执行人' && sortDirection === 'desc' }" /></span></button></th>
+                  <th style="width:84px;"><button class="task-sort-button" :class="{ active: sortBy === '确认人' }" :aria-label="`按确认人${sortBy === '确认人' && sortDirection === 'asc' ? '降序' : '升序'}排列`" @click="toggleTaskSort('确认人')">确认人<span class="task-sort-icons"><IconUp :class="{ on: sortBy === '确认人' && sortDirection === 'asc' }" /><IconDown :class="{ on: sortBy === '确认人' && sortDirection === 'desc' }" /></span></button></th>
+                  <th style="width:88px;"><button class="task-sort-button" :class="{ active: sortBy === '状态' }" :aria-label="`按状态${sortBy === '状态' && sortDirection === 'asc' ? '降序' : '升序'}排列`" @click="toggleTaskSort('状态')">状态<span class="task-sort-icons"><IconUp :class="{ on: sortBy === '状态' && sortDirection === 'asc' }" /><IconDown :class="{ on: sortBy === '状态' && sortDirection === 'desc' }" /></span></button></th>
+                  <th style="width:110px;"><button class="task-sort-button" :class="{ active: sortBy === '截止时间' }" :aria-label="`按截止时间${sortBy === '截止时间' && sortDirection === 'asc' ? '降序' : '升序'}排列`" @click="toggleTaskSort('截止时间')">截止时间<span class="task-sort-icons"><IconUp :class="{ on: sortBy === '截止时间' && sortDirection === 'asc' }" /><IconDown :class="{ on: sortBy === '截止时间' && sortDirection === 'desc' }" /></span></button></th>
+                  <th style="width:124px;">操作</th>
+                </tr></thead>
+                <tbody>
+                  <tr v-for="task in pagedTasks" :key="task.id" class="task-row" :class="{ 'row-done': task.status === '已完成' }" @click="onTaskRowClick(task)">
+                    <td @click.stop><span class="chk" :class="{ on: task.status === '已完成', half: task.status === '待确认', disabled: !taskChecklistAction(task) }" @click="taskChecklistAction(task) && handleTaskChecklistChange(task)"></span></td>
+                    <td><div class="cell-main">{{ task.id }} {{ task.title }}</div><div class="sub2">{{ task.module }}</div></td>
+                    <td><span class="pri" :class="priMeta(task.priority).cls"><i></i>{{ priMeta(task.priority).txt }}</span></td>
+                    <td class="nowrap" :title="taskExecutorLabel(task)"><span class="task-person-cell">{{ taskExecutorNames(task)[0] }}<b v-if="taskExecutorNames(task).length > 1">+{{ taskExecutorNames(task).length - 1 }}</b></span></td>
+                    <td class="nowrap">{{ task.confirmer || task.owner }}</td>
+                    <td><span class="tag-st" :class="stTagCls(task.status)">{{ task.status }}</span></td>
+                    <td class="grey nowrap">{{ task.due }}</td>
+                    <td class="op-cell nowrap" @click.stop>
+                      <span class="task-row-actions">
+                        <a class="op" :class="{ 'op-disabled': !canEditTask(task) }" @click="editTaskFromList(task)">编辑</a>
+                        <a-dropdown v-if="task.status === '待确认' && taskChecklistAction(task) === 'confirm'" trigger="click" position="br">
+                          <a class="op task-action-dropdown" @click.stop>处理<IconDown /></a>
+                          <template #content>
+                            <a-menu class="task-action-menu" @menu-item-click="action => handleTaskActionMenu(task, action)">
+                              <a-menu-item key="confirm"><IconCheckCircle />确认完成</a-menu-item>
+                              <a-menu-item key="reject"><IconArrowLeft />退回修改</a-menu-item>
+                              <a-menu-item v-if="canDeleteTask(task)" key="delete" class="tree-danger-option"><IconDelete />删除任务</a-menu-item>
+                            </a-menu>
+                          </template>
+                        </a-dropdown>
+                        <a v-else-if="canDeleteTask(task)" class="op op-danger" @click="deleteTaskFromList(task)">删除</a>
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-if="!visibleTasks.length" class="tree-empty">暂无符合条件的任务</div>
+            </div>
+            <div v-if="visibleTasks.length" class="pagination">
+              共 {{ visibleTasks.length }} 条
+              <span class="pg-btn" :class="{ disabled: taskPage <= 1 }" aria-label="上一页" @click="taskPage > 1 && taskPage--"><IconCaretLeft /></span>
+              <span v-for="p in taskPageCount" :key="p" class="pg-btn" :class="{ active: p === taskPage }" @click="taskPage = p">{{ p }}</span>
+              <span class="pg-btn" :class="{ disabled: taskPage >= taskPageCount }" aria-label="下一页" @click="taskPage < taskPageCount && taskPage++"><IconCaretRight /></span>
+              <a-select v-model="taskPageSize" class="pg-size" size="mini" aria-label="每页显示条数">
+                <a-option :value="8">8条/页</a-option>
+                <a-option :value="16">16条/页</a-option>
+                <a-option :value="24">24条/页</a-option>
+              </a-select>
+            </div>
+          </div>
+          <section v-else class="task-board-wrapper"><div class="task-board-section"><div v-for="lane in boardLanes" :key="lane.key" class="task-board-lane"><header draggable="true" @dragstart="startLaneDrag(lane, $event)" @dragover.prevent @drop="dropLane(lane, $event)"><span class="task-board-lane-title"><a-tag :color="lane.color">{{ lane.title }}</a-tag><b>{{ orderedBoardTasks(lane).length }}</b></span><span class="task-board-lane-actions"><a-tooltip content="编辑列"><a-button type="text" size="mini" @click.stop="openLaneModal(lane)"><IconEdit /></a-button></a-tooltip><a-tooltip content="删除列"><a-button type="text" size="mini" @click.stop="deleteLane(lane)"><IconDelete /></a-button></a-tooltip></span></header><div class="task-board-cards" @dragover.prevent @drop="dropTaskOnLane(lane, $event)"><button v-for="task in orderedBoardTasks(lane)" :key="task.id" class="task-board-card" draggable="true" @dragstart.stop="startTaskDrag(task, $event)" @dragover.prevent @drop="dropTaskBefore(task, lane, $event)" @click="onTaskRowClick(task)"><div class="task-board-card-top"><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag><span>{{ task.due }}</span></div><strong>{{ task.title }}</strong><small>{{ task.id }}</small><footer><span><a-avatar :size="22">{{ task.owner.slice(0, 1) }}</a-avatar>{{ task.owner }}</span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></footer></button><a-empty v-if="!orderedBoardTasks(lane).length" description="暂无任务" /></div></div></div></section>
+          <input ref="taskImportInput" class="task-import-input" type="file" accept=".csv,text/csv" @change="importTasks" />
+        </div>
+      </div>
     </div>
 
     <a-modal
@@ -2344,21 +3015,15 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
       title="新建任务"
       ok-text="创建任务"
       cancel-text="取消"
-      :ok-button-props="{ disabled: !draft.title.trim() || (draft.taskType === '项目任务' && !draft.phase) }"
+      :ok-button-props="{ disabled: !draft.title.trim() || !draft.phase }"
       @ok="createTask"
     >
       <a-form layout="vertical">
-        <a-form-item v-if="taskCreationSource !== 'project'" label="任务类型" required>
-          <a-radio-group :model-value="draft.taskType" type="button" @change="setTaskDraftType">
-            <a-radio value="项目任务">项目任务</a-radio>
-            <a-radio value="其他任务">其他任务</a-radio>
-          </a-radio-group>
-        </a-form-item>
         <div v-if="taskCreationSource === 'project'" class="modal-context">
           <span>项目期号</span>
           <strong>{{ selectedPhase.code }} {{ selectedPhase.projectName }}-{{ selectedPhase.name }}</strong>
         </div>
-        <a-form-item v-else-if="draft.taskType === '项目任务'" label="项目期号" required>
+        <a-form-item v-else label="项目期号" required>
           <a-select v-model="draft.phase" allow-search placeholder="搜索并选择项目期号">
             <a-option v-for="phase in dashboardPhaseRows" :key="phase.key" :value="phase.key">{{ phase.code }} · {{ phase.projectName }}-{{ phase.name }}</a-option>
           </a-select>
@@ -2406,7 +3071,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
         <header><strong>基础设置</strong><span>用于项目管理系统的通用展示和默认规则</span></header>
         <a-form layout="vertical">
           <a-form-item label="系统名称" required><a-input v-model="systemSettingsDraft.name" maxlength="30" placeholder="填写系统名称" /></a-form-item>
-          <a-form-item label="系统 Logo"><div class="system-logo-picker"><div class="system-logo-preview"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" alt="系统 Logo" /><span v-else class="pm-logo-mark pm-logo-mark-large" aria-label="PM">PM</span></div><div><input ref="systemSettingsLogoInput" class="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @change="handleSystemLogoChange" /><a-button type="outline" size="small" @click="systemSettingsLogoInput?.click()"><IconImport />上传 Logo</a-button><a-button v-if="systemSettingsDraft.logoUrl" type="text" size="small" @click="systemSettingsDraft.logoUrl = ''"><IconDelete />移除</a-button><small>支持 PNG、JPG、WEBP 或 SVG，文件不超过 5 MB</small></div></div></a-form-item>
+          <a-form-item label="系统 Logo"><div class="system-logo-picker"><div class="system-logo-preview"><img v-if="systemSettingsDraft.logoUrl" :src="systemSettingsDraft.logoUrl" :alt="systemSettingsDraft.name" /><span v-else class="brand-wordmark brand-wordmark-preview">{{ systemSettingsDraft.name }}</span></div><div><input ref="systemSettingsLogoInput" class="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @change="handleSystemLogoChange" /><a-button type="outline" size="small" @click="systemSettingsLogoInput?.click()"><IconImport />上传 Logo</a-button><a-button v-if="systemSettingsDraft.logoUrl" type="text" size="small" @click="systemSettingsDraft.logoUrl = ''"><IconDelete />移除</a-button><small>建议上传包含完整品牌名称的横版 Logo；支持 PNG、JPG、WEBP 或 SVG，文件不超过 5 MB</small></div></div></a-form-item>
         </a-form>
       </section>
       <section class="system-settings-section">
@@ -2465,7 +3130,7 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
           <div v-else class="task-title-view-row" role="button" tabindex="0" aria-label="点击编辑任务标题" @click="startTaskTitleEdit" @keydown.enter.prevent="startTaskTitleEdit" @keydown.space.prevent="startTaskTitleEdit">
             <strong>{{ selectedTask?.title || '任务详情' }}</strong>
           </div>
-          <small v-if="selectedTask" class="task-drawer-id">任务编号 · {{ selectedTask.id }}<template v-if="selectedTask.taskType === '其他任务' || (!selectedTask.taskType && !selectedTask.phase)"> · 其他任务</template></small>
+          <small v-if="selectedTask" class="task-drawer-id">任务编号 · {{ selectedTask.id }}</small>
         </div>
       </template>
       <template v-if="selectedTask">
@@ -2545,34 +3210,60 @@ function phaseStatusColor(status) { return statusColors[status] || "gray"; }
     <a-modal v-model:visible="mediaPreviewVisible" :title="mediaPreview?.alt || '媒体预览'" width="880px" footer="false" @cancel="closeMediaPreview"><div class="rich-media-preview"><img v-if="mediaPreview?.type === 'img'" :src="mediaPreview.src" :alt="mediaPreview.alt" /><video v-else-if="mediaPreview?.type === 'video'" :src="mediaPreview.src" controls autoplay /><audio v-else-if="mediaPreview?.type === 'audio'" :src="mediaPreview.src" controls autoplay /><div v-else-if="mediaPreview?.type === 'file'" class="rich-file-preview"><IconFile /><strong>{{ mediaPreview.alt }}</strong><a-button type="primary" :href="mediaPreview.src" :download="mediaPreview.download">下载附件</a-button></div></div></a-modal>
     <a-drawer v-model:visible="phaseDrawerVisible" width="620px" title="期号设置"><div class="phase-settings-tabs"><button v-for="tab in [{ key: 'basic', label: '基本信息' }, { key: 'stats', label: '数据统计' }, { key: 'hours', label: '工时统计' }, { key: 'files', label: '项目文件' }, { key: 'members', label: '期号成员' }]" :key="tab.key" :class="{ active: phaseSettingsTab === tab.key }" @click="phaseSettingsTab = tab.key">{{ tab.label }}</button></div><template v-if="phaseSettingsTab === 'basic'"><div class="phase-detail-hero"><h2>{{ selectedPhase.code }}</h2><p>{{ selectedPhase.projectName }}-{{ selectedPhase.name }}</p><a-button v-if="!phaseEditing" class="phase-edit-button" type="outline" size="small" @click="startPhaseEdit"><IconEdit />编辑基本信息</a-button></div><div v-if="!phaseEditing" class="phase-descriptions"><p>客户：{{ selectedPhase.customerCode }}-{{ selectedPhase.customerName }}</p><p>项目：{{ selectedPhase.projectCode }} {{ selectedPhase.projectName }}</p><p>负责人：{{ selectedPhase.owner }}</p><p>计划时间：{{ selectedPhase.dates }}</p></div><a-form v-else class="phase-basic-form" layout="vertical"><a-form-item label="期号" required><a-input v-model="phaseDraft.phaseNumber" maxlength="20" placeholder="填写当前项目下唯一的期号" /></a-form-item><a-form-item label="期号名称" required><a-input v-model="phaseDraft.name" /></a-form-item><div class="form-grid"><a-form-item label="状态"><a-select v-model="phaseDraft.status"><a-option v-for="status in ['未开始', '进行中', '已完成', '延期']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="负责人"><a-select v-model="phaseDraft.owner" allow-search placeholder="搜索负责人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item></div><a-form-item label="计划时间"><a-range-picker v-model="phaseDraft.datesRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /></a-form-item><div class="phase-form-actions"><a-button @click="phaseEditing = false">取消</a-button><a-button type="primary" @click="savePhaseBasicInfo">保存</a-button></div></a-form></template><template v-else-if="phaseSettingsTab === 'stats'"><section class="phase-settings-panel"><header><strong>期号数据统计</strong><span>{{ selectedPhase.code }} · {{ selectedPhase.name }}</span></header><div class="phase-stat-grid"><article><strong>{{ phaseTaskStats.total }}</strong><span>任务总数</span></article><article><strong>{{ phaseTaskStats.incomplete }}</strong><span>未完成</span></article><article><strong>{{ phaseTaskStats.pending }}</strong><span>待确认</span></article><article><strong>{{ phaseTaskStats.completed }}</strong><span>已完成</span></article></div><div class="phase-stat-grid phase-stat-grid-secondary"><article><strong>{{ phaseTaskStats.overdue }}</strong><span>已逾期</span></article><article><strong>{{ phaseTaskStats.dueSoon }}</strong><span>7天内到期</span></article><article><strong>{{ phaseTaskStats.owners }}</strong><span>负责人</span></article><article><strong>{{ phaseTaskStats.p0 }}</strong><span>P0任务</span></article></div><div class="phase-stat-summary"><span>平均计划周期 <b>{{ phaseTaskStats.averageCycle }}天</b></span><span>统计范围：当前期号全部任务</span></div></section></template><template v-else-if="phaseSettingsTab === 'hours'"><section class="phase-settings-panel"><header><div><strong>工时明细</strong><span>按成员与时间范围筛选</span></div></header><div class="worklog-filters"><a-select v-model="worklogMemberFilter" allow-search><a-option value="全部成员">全部成员</a-option><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-range-picker v-model="worklogDateRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /></div><div class="worklog-member-summary"><div v-for="item in worklogMemberSummary" :key="item.member"><span>{{ item.member }}</span><strong>{{ item.hours }}h</strong></div><span v-if="!worklogMemberSummary.length">当前筛选暂无工时</span></div><div class="worklog-list"><div class="worklog-row worklog-row-heading"><span>日期</span><span>成员</span><span>工时</span><span>工作内容</span></div><div v-for="log in filteredWorklogs" :key="log.id" class="worklog-row"><span>{{ log.date }}</span><span>{{ log.member }}</span><strong>{{ log.hours }}h</strong><span>{{ log.content }}</span></div><a-empty v-if="!filteredWorklogs.length" description="暂无工时记录" /></div></section></template><template v-else-if="phaseSettingsTab === 'files'"><section class="phase-settings-panel"><header><div><strong>项目文件</strong><span>当前期号交付资料与协作附件</span></div><a-button type="primary" size="small" @click="openPhaseFileModal"><IconPlus />添加文件</a-button></header><div class="phase-file-list"><div v-for="file in currentPhaseFiles" :key="file.id" class="phase-file-item"><IconFile /><span><b>{{ file.name }}</b><small>{{ file.type }} · {{ file.size }} · 更新于 {{ file.updated }}</small></span><span class="file-actions"><a-tooltip content="预览文件"><a-button type="text" size="small" @click="previewPhaseFile(file)"><IconInfoCircle /></a-button></a-tooltip><a-tooltip content="编辑文件"><a-button type="text" size="small" @click="openPhaseFileEdit(file)"><IconEdit /></a-button></a-tooltip><a-tooltip content="下载文件"><a-button type="text" size="small" @click="notify(`已准备下载：${file.name}`)"><IconExport /></a-button></a-tooltip><a-tooltip content="删除文件"><a-button type="text" size="small" @click="removePhaseFile(file)"><IconDelete /></a-button></a-tooltip></span></div><a-empty v-if="!currentPhaseFiles.length" description="暂无项目文件" /></div></section></template><template v-else><section class="phase-settings-panel"><header><div><strong>期号成员</strong><span>管理当前期号的协作成员与职责</span></div><a-button type="primary" size="small" @click="openPhaseMemberModal"><IconPlus />添加成员</a-button></header><div class="phase-member-list"><div v-for="member in currentPhaseMembers" :key="member.id" class="phase-member-item"><a-avatar :size="32">{{ member.name.slice(0, 1) }}</a-avatar><span><b>{{ member.rawName || member.name }}</b><small>成员类型：{{ member.type || "内部成员" }}</small><small>期号角色：{{ member.baseRole || member.role }}</small><small>加入时间：{{ member.joinedAt || "未记录" }}</small><small v-if="member.permissions?.length">期号权限：{{ member.permissions.join("、") }}</small></span><span class="phase-member-actions"><a-tooltip content="权限设置"><a-button type="text" size="small" @click="openPhaseMemberEditor(member)"><IconSettings /></a-button></a-tooltip><a-tooltip content="移除成员"><a-button type="text" size="small" @click="deletePhaseMember(member)"><IconDelete /></a-button></a-tooltip></span></div><a-empty v-if="!currentPhaseMembers.length" description="暂无期号成员" /></div></section></template><template #footer><div class="drawer-footer"><a-button @click="phaseDrawerVisible = false">取消</a-button><a-button type="primary" @click="confirmPhaseSettings">确定</a-button></div></template></a-drawer>
 <a-modal v-model:visible="projectCreateModalVisible" :title="projectCreateMode === 'edit' ? (projectCreateType === 'project' ? '编辑项目' : '编辑期号') : '添加项目或期号'" :ok-text="projectCreateMode === 'edit' ? '保存' : '添加'" cancel-text="取消" @ok="saveProjectCreate"><a-form layout="vertical"><a-form-item v-if="projectCreateMode === 'create'" label="添加类型"><a-select v-model="projectCreateType" @change="switchProjectCreateType"><a-option value="project">项目</a-option><a-option value="phase">期号</a-option></a-select></a-form-item><a-form-item label="客户"><a-select v-model="projectCreateDraft.customerKey" allow-search placeholder="选择客户" :disabled="projectCreateMode === 'edit'" @change="changeProjectCreateCustomer"><a-option v-for="customer in createCustomerOptions" :key="customer.key" :value="customer.key">{{ customer.code }}-{{ customer.name }}</a-option></a-select></a-form-item><template v-if="projectCreateType === 'project'"><div class="form-grid"><a-form-item label="项目编号"><a-input v-model="projectCreateDraft.projectCode" placeholder="例如 03" /></a-form-item><a-form-item label="项目名称"><a-input v-model="projectCreateDraft.projectName" placeholder="填写项目名称" /></a-form-item></div></template><template v-else><a-form-item label="项目"><a-select v-model="projectCreateDraft.projectKey" allow-search placeholder="选择项目" :disabled="projectCreateMode === 'edit'"><a-option v-for="project in createProjectOptions" :key="project.key" :value="project.key">{{ project.code }}-{{ project.name }}</a-option></a-select></a-form-item><div class="form-grid"><a-form-item label="期号编号"><a-input v-model="projectCreateDraft.phaseCode" placeholder="例如 03，或填写完整编码" /></a-form-item><a-form-item label="期号名称"><a-input v-model="projectCreateDraft.phaseName" placeholder="填写期号名称" /></a-form-item><a-form-item label="状态"><a-select v-model="projectCreateDraft.phaseStatus"><a-option v-for="status in ['未开始', '进行中', '已完成', '延期']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item><a-form-item label="负责人"><a-select v-model="projectCreateDraft.phaseOwner" allow-search placeholder="搜索负责人"><a-option v-for="member in teamMembers" :key="member" :value="member">{{ member }}</a-option></a-select></a-form-item></div><a-form-item label="计划时间"><a-range-picker v-model="projectCreateDraft.phaseDatesRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /></a-form-item></template></a-form></a-modal>    <a-modal v-model:visible="phaseFileModalVisible" :title="phaseFileEditingId ? '编辑项目文件' : '添加项目文件'" :ok-text="phaseFileEditingId ? '保存' : '添加'" cancel-text="取消" :ok-button-props="{ disabled: !phaseFileDraft.file }" @ok="savePhaseFile"><div class="phase-file-upload-panel"><input ref="phaseFileInput" class="phase-file-input" type="file" @change="handlePhaseFileChange" /><p v-if="phaseFileDraft.current" class="phase-file-current">当前文件：{{ phaseFileDraft.current.name }}<small>{{ phaseFileDraft.current.type }} · {{ phaseFileDraft.current.size }}</small></p><a-button type="outline" long @click="phaseFileInput?.click()"><IconImport />选择替换文件</a-button><p v-if="phaseFileDraft.file" class="phase-file-selected"><IconFile /><strong>{{ phaseFileDraft.file.name }}</strong><span>{{ formatFileSize(phaseFileDraft.file.size) }}</span></p><p v-else class="phase-file-empty">请选择要添加到当前期号的文件</p></div></a-modal><a-modal v-model:visible="phaseFilePreviewVisible" :title="phaseFilePreview?.name || '文件预览'" width="760px" footer="false" @cancel="closePhaseFilePreview"><div class="phase-file-preview"><iframe v-if="phaseFilePreviewUrl && phaseFilePreview?.type === 'PDF'" :src="phaseFilePreviewUrl" title="文件预览" /><img v-else-if="phaseFilePreviewUrl && phaseFilePreview?.source?.type?.startsWith('image/')" :src="phaseFilePreviewUrl" alt="文件预览" /><div v-else class="phase-file-preview-empty"><IconFile /><strong>{{ phaseFilePreview?.name }}</strong><span>{{ phaseFilePreview?.type }} · {{ phaseFilePreview?.size }}</span><small>当前文件暂不支持在线预览，请使用下载操作查看。</small></div></div></a-modal>
+    <a-modal v-model:visible="onlineFilePreviewVisible" :title="phaseFilePreview?.name || '在线文件查看'" width="860px" :footer="false" @cancel="closeOnlinePhaseFilePreview">
+      <div class="phase-file-preview online-file-preview">
+        <article v-if="phaseFilePreview?.type === 'DOCX'" class="online-document-preview" v-html="onlineDocumentPreviewHtml"></article>
+        <div v-else-if="phaseFilePreview?.type === 'XLSX'" class="online-sheet-preview">
+          <table><thead><tr><th></th><th v-for="column in onlineSheetPreviewColumns" :key="column">{{ column }}</th></tr></thead><tbody><tr v-for="row in onlineSheetPreviewRows" :key="row.number"><th>{{ row.number }}</th><td v-for="(cell, index) in row.cells" :key="`${row.number}-${index}`">{{ cell }}</td></tr></tbody></table>
+        </div>
+        <div v-else class="online-presentation-preview"><article v-for="(slide, index) in phaseFilePreview?.slides || []" :key="slide.id || index"><small>第 {{ index + 1 }} 页</small><strong>{{ slide.title || '无标题' }}</strong><p>{{ slide.body || '暂无正文' }}</p></article></div>
+      </div>
+    </a-modal>
+    <a-modal v-model:visible="phaseUploadModalVisible" title="上传文件" ok-text="上传" cancel-text="取消" :ok-button-props="{ disabled: !phaseFileDraft.file }" @ok="savePhaseFile">
+      <div class="phase-file-upload-panel">
+        <input ref="phaseUploadInput" class="phase-file-input" type="file" :accept="phaseFileAccept" @change="handlePhaseFileChange" />
+        <a-button type="outline" long @click="phaseUploadInput?.click()"><IconUpload />选择本地文件</a-button>
+        <p class="phase-file-upload-note"><IconInfoCircle />支持 Word、Excel、PPT、PDF、图片及压缩包，单个文件不超过 50 MB</p>
+        <p v-if="phaseFileDraft.file" class="phase-file-selected"><IconFile /><strong>{{ phaseFileDraft.file.name }}</strong><span>{{ formatFileSize(phaseFileDraft.file.size) }}</span></p>
+      </div>
+    </a-modal>
 <a-modal v-model:visible="phaseMemberModalVisible" :title="phaseMemberEditingId ? '编辑期号成员' : '添加期号成员'" :ok-text="phaseMemberEditingId ? '保存权限' : (phaseMemberDraft.memberType === 'external' ? '发送邀请' : '添加')" cancel-text="取消" @ok="savePhaseMember"><a-form layout="vertical"><a-form-item label="成员类型"><a-radio-group v-model="phaseMemberDraft.memberType" type="button"><a-radio value="internal"><IconUser />内部成员</a-radio><a-radio value="external"><IconUserAdd />邀请外部人员</a-radio></a-radio-group></a-form-item><template v-if="phaseMemberDraft.memberType === 'internal'"><a-form-item label="成员"><a-select v-model="phaseMemberDraft.name" allow-search placeholder="搜索成员姓名"><a-option v-for="name in teamMembers" :key="name" :value="name">{{ name }}</a-option></a-select></a-form-item></template><template v-else><div class="external-member-note"><IconInfoCircle /><span>先配置外部人员和期号权限，再生成可复制的专属邀请链接。</span></div><a-form-item label="姓名" required><a-input v-model="phaseMemberDraft.name" placeholder="填写客户或兼职人员姓名" /></a-form-item><div class="form-grid"><a-form-item label="人员来源"><a-select v-model="phaseMemberDraft.externalType"><a-option value="客户">客户</a-option><a-option value="兼职">兼职</a-option><a-option value="合作方">合作方</a-option></a-select></a-form-item><a-form-item label="联系方式" required><a-input v-model="phaseMemberDraft.contact" placeholder="手机号或邮箱" /></a-form-item></div><a-form-item label="邀请链接" required><div class="invite-link-row"><a-input v-model="phaseMemberDraft.inviteLink" readonly placeholder="点击右侧按钮生成邀请链接" /><a-tooltip content="生成或重新生成"><a-button type="outline" aria-label="生成或重新生成邀请链接" @click="generatePhaseMemberInviteLink"><IconRefresh /></a-button></a-tooltip><a-tooltip content="复制邀请链接"><a-button type="outline" aria-label="复制邀请链接" :disabled="!phaseMemberDraft.inviteLink" @click="copyPhaseMemberInviteLink"><IconCopy /></a-button></a-tooltip></div></a-form-item></template><a-form-item label="期号角色"><a-select v-model="phaseMemberDraft.baseRole"><a-option value="项目负责人">项目负责人</a-option><a-option value="项目成员">项目成员</a-option><a-option value="客户联系人">客户联系人</a-option><a-option value="外部协作者">外部协作者</a-option></a-select></a-form-item><a-form-item label="期号权限" required><a-checkbox-group v-model="phaseMemberDraft.permissions"><a-checkbox value="项目资料">项目资料</a-checkbox><a-checkbox value="任务查看">任务查看</a-checkbox><a-checkbox value="任务执行">任务执行</a-checkbox><a-checkbox value="文件查看">文件查看</a-checkbox><a-checkbox value="文件管理">文件管理</a-checkbox></a-checkbox-group></a-form-item></a-form></a-modal>
     <a-drawer :visible="Boolean(selectedProject)" width="620px" title="项目详情" @cancel="selectedProject = null"><template v-if="selectedProject"><div class="project-detail-hero"><span>{{ selectedProject.customerCode }}-{{ selectedProject.code }}</span><h2>{{ selectedProject.name }}</h2><p>{{ selectedProject.customerCode }}-{{ selectedProject.customerName }}</p></div><section class="project-public-section"><header><div><strong>项目公共资料</strong><small>项目级公共信息，供项目成员协作查看</small></div><div class="project-public-actions"><a-button type="text" size="small" @click="openProjectInfoEditor"><IconEdit />编辑资料</a-button></div></header><div v-if="selectedProjectPublicDocument" class="rich-text-display project-public-document" v-html="selectedProjectPublicDocument" /><a-empty v-else description="暂无项目公共资料" /></section></template></a-drawer>
     <a-modal v-model:visible="projectInfoModalVisible" title="编辑项目公共资料" ok-text="保存" cancel-text="取消" @ok="saveProjectInfo"><a-form layout="vertical"><a-form-item label="资料内容"><RichTextEditor v-model="projectInfoDraft" placeholder="补充客户资料、服务器信息、代码仓库、部署地址等项目公共信息" /></a-form-item></a-form></a-modal>
-    <a-drawer v-model:visible="helpVisible" width="440px" title="项目模块帮助"><a-input placeholder="搜索帮助内容"><template #prefix><IconSearch /></template></a-input><div class="help-list"><details><summary>如何创建新任务？</summary><p>选择左侧期号后，在任务搜索筛选栏点击新建任务，任务会直接归属当前期号；临时事项请前往任务页面创建。</p></details><details><summary>项目树的层级是什么？</summary><p>项目树按客户、项目、期号三级展示；任务也可以作为其他任务单独创建。</p></details><details><summary>如何查看到期风险？</summary><p>使用截止时间筛选定位任务；工作台的今日待办和统计页会优先展示已逾期任务。</p></details></div></a-drawer>
-    <a-modal :visible="Boolean(selectedWorkHoursPhase)" title="期号日报详情" :footer="false" width="760px" @cancel="selectedWorkHoursPhase = null"><template v-if="selectedWorkHoursPhase"><div class="work-hours-report-detail"><header><div><h2>{{ selectedWorkHoursPhase.code }} · {{ selectedWorkHoursPhase.name }}</h2><p>{{ selectedWorkHoursPhase.projectName }}</p></div><a-tag :color="phaseStatusColor(selectedWorkHoursPhase.status)">{{ selectedWorkHoursPhase.status }}</a-tag></header><div class="work-hours-report-summary"><span>日报数量<b>{{ selectedWorkHoursPhaseReports.length }} 份</b></span><span>登记工时<b>{{ selectedWorkHoursPhaseReports.reduce((sum, report) => sum + report.phaseHours, 0) }}h</b></span><span>参与成员<b>{{ new Set(selectedWorkHoursPhaseReports.map(report => report.sender)).size }} 人</b></span><span>筛选范围<b>{{ workHoursMember }}</b></span></div><div v-if="selectedWorkHoursPhaseReports.length" class="work-hours-report-list"><article v-for="report in selectedWorkHoursPhaseReports" :key="report.id"><header><div><strong>{{ dailyReportDisplayName(report) }}</strong><small>{{ report.id }} · {{ report.sentAt }}</small></div><span><a-tag :color="dailyReportStatusColors[report.status]">{{ report.status }}</a-tag><a-button type="text" size="small" @click="openWorkHoursDailyReport(report)"><IconEye />查看完整日报</a-button></span></header><div class="work-hours-report-meta"><span>{{ report.sender }}</span><b>{{ report.phaseHours }}h</b></div><section v-for="entry in report.phaseTasks" :key="entry.id"><strong>{{ entry.title }}</strong><p>{{ entry.summary }}</p></section></article></div><a-empty v-else description="当前筛选下暂无关联日报" /></div></template></a-modal>
-    <a-modal v-model:visible="dailyReportModalVisible" :title="dailyReportEditingId ? '编辑日报' : '发送日报'" :footer="false" width="760px">
+    <a-drawer v-model:visible="helpVisible" width="440px" title="项目模块帮助"><a-input class="help-search" allow-clear placeholder="搜索帮助内容"><template #prefix><IconSearch /></template></a-input><div class="help-list"><details><summary>如何创建新任务？</summary><p>选择左侧期号后，在任务搜索筛选栏点击新建任务，任务会直接归属当前期号；也可以在任务页先选择项目期号后创建。</p></details><details><summary>项目树的层级是什么？</summary><p>项目树按客户、项目、期号三级展示，所有任务都归属具体项目期号。</p></details><details><summary>如何查看到期风险？</summary><p>使用截止时间筛选定位任务；工作台的今日待办和统计页会优先展示已逾期任务。</p></details></div></a-drawer>
+    <a-modal :visible="Boolean(selectedWorkHoursPhase)" title="期号日报详情" :footer="false" width="760px" @cancel="selectedWorkHoursPhase = null"><template v-if="selectedWorkHoursPhase"><div class="work-hours-report-detail"><header><div><h2>{{ selectedWorkHoursPhase.code }} · {{ selectedWorkHoursPhase.name }}</h2><p>{{ selectedWorkHoursPhase.projectName }}</p></div><a-tag :color="phaseStatusColor(selectedWorkHoursPhase.status)">{{ selectedWorkHoursPhase.status }}</a-tag></header><div class="work-hours-report-summary"><span>日报数量<b>{{ selectedWorkHoursPhaseReports.length }} 份</b></span><span>登记工时<b>{{ selectedWorkHoursPhaseReports.reduce((sum, report) => sum + report.phaseHours, 0) }}h</b></span><span>参与成员<b>{{ new Set(selectedWorkHoursPhaseReports.map(report => report.sender)).size }} 人</b></span><span>筛选范围<b>{{ workHoursMember }}</b></span></div><div v-if="selectedWorkHoursPhaseReports.length" class="work-hours-report-list"><article v-for="report in selectedWorkHoursPhaseReports" :key="report.id"><header><div><strong>{{ dailyReportDisplayName(report) }}</strong><small>{{ report.id }} · {{ report.sentAt }}</small></div><span><a-tag :color="dailyReportStatusColors[report.status]">{{ report.status }}</a-tag><a-button type="text" size="small" @click="openWorkHoursDailyReport(report)"><IconEye />查看完整日报</a-button></span></header><div class="work-hours-report-meta"><span>{{ report.sender }}</span><b>{{ report.phaseHours }}h</b></div><section v-for="entry in report.phaseTasks" :key="entry.id"><strong>{{ entry.title }}</strong><small>{{ entry.category }}</small><p v-if="entry.summary">备注：{{ entry.summary }}</p></section></article></div><a-empty v-else description="当前筛选下暂无关联日报" /></div></template></a-modal>
+    <a-modal v-model:visible="dailyReportModalVisible" :title="dailyReportEditingId ? '编辑日报' : '发送日报'" width="760px">
       <a-form layout="vertical">
         <div class="form-grid">
           <a-form-item label="日报日期" required><a-date-picker v-model="dailyReportDraft.date" value-format="YYYY-MM-DD" format="YYYY-MM-DD" @change="syncDailyReportName" /></a-form-item>
           <a-form-item label="日报状态"><a-select v-model="dailyReportDraft.status"><a-option v-for="status in ['草稿', '已发送']" :key="status" :value="status">{{ status }}</a-option></a-select></a-form-item>
         </div>
         <section class="daily-task-entry-editor">
-          <header><div><strong>今日完成任务</strong><small>项目任务必须关联期号，其他任务直接填写内容。一天可填写多个任务。</small></div><a-button type="outline" size="small" @click="addDailyReportTask"><IconPlus />添加任务</a-button></header>
+          <header><div><strong>今日完成任务</strong><small>每条任务必须关联项目期号并独立登记工时，一天可填写多个任务。</small></div><a-button type="outline" size="small" @click="addDailyReportTask"><IconPlus />添加任务</a-button></header>
           <div v-for="(entry, index) in dailyReportDraft.tasks" :key="entry.id" class="daily-task-entry">
             <div class="daily-task-entry-heading"><strong>任务 {{ index + 1 }}</strong><a-button v-if="dailyReportDraft.tasks.length > 1" type="text" status="danger" size="small" aria-label="删除任务" @click="removeDailyReportTask(entry)"><IconDelete /></a-button></div>
-            <a-form-item label="任务类型" required><a-radio-group :model-value="entry.taskType || (entry.phase ? 'project' : 'nonProject')" type="button" @change="value => setDailyReportTaskType(entry, value)"><a-radio value="project">项目任务</a-radio><a-radio value="nonProject">其他任务</a-radio></a-radio-group></a-form-item>
-            <a-form-item v-if="entry.taskType === 'project'" label="关联期号" required><a-select v-model="entry.phase" allow-search placeholder="先选择关联期号"><a-option v-for="phase in dashboardPhaseRows" :key="phase.key" :value="phase.key">{{ phase.code }} · {{ phase.name }}</a-option></a-select></a-form-item>
+            <a-form-item label="关联期号" required><a-select v-model="entry.phase" allow-search placeholder="搜索并选择项目期号"><a-option v-for="phase in dashboardPhaseRows" :key="phase.key" :value="phase.key">{{ phase.code }} · {{ phase.projectName }}-{{ phase.name }}</a-option></a-select></a-form-item>
             <div class="form-grid">
-              <a-form-item label="任务名称" required><a-input v-model="entry.title" :placeholder="entry.taskType === 'project' ? '填写该期号下的任务名称' : '填写其他任务名称'" /></a-form-item>
+              <a-form-item label="任务分类" required><a-select v-model="entry.category" placeholder="选择任务分类"><a-option v-for="category in dailyReportTaskCategoryOptions" :key="category" :value="category">{{ category }}</a-option></a-select></a-form-item>
               <a-form-item label="工时" required><a-input-number v-model="entry.hours" :min="0.1" :max="24" :precision="1" placeholder="小时" /></a-form-item>
             </div>
-            <a-form-item label="任务内容" required><a-textarea v-model="entry.summary" :max-length="500" show-word-limit placeholder="填写这条任务今天完成的具体内容" /></a-form-item>
+            <a-form-item label="任务内容" required><a-textarea v-model="entry.title" :max-length="500" :auto-size="{ minRows: 3, maxRows: 6 }" show-word-limit placeholder="填写这条任务今天完成的具体内容" /></a-form-item>
+            <a-form-item label="备注"><a-textarea v-model="entry.summary" :max-length="300" :auto-size="{ minRows: 2, maxRows: 4 }" show-word-limit placeholder="补充说明（选填）" /></a-form-item>
           </div>
         </section>
         <a-form-item label="明日计划"><a-textarea v-model="dailyReportDraft.nextPlan" :max-length="500" show-word-limit placeholder="填写明日计划" /></a-form-item>
       </a-form>
       <template #footer><div class="daily-report-modal-footer"><a-button @click="dailyReportModalVisible = false">取消</a-button><a-button @click="saveDailyReport('草稿')">保存草稿</a-button><a-button type="primary" @click="saveDailyReport('已发送')">发送日报</a-button></div></template>
     </a-modal>
-    <a-modal :visible="Boolean(selectedDailyReport)" title="日报详情" :footer="false" width="760px" @cancel="selectedDailyReport = null"><template v-if="selectedDailyReport"><div class="daily-report-detail"><header><div><h2>{{ dailyReportDisplayName(selectedDailyReport) }}</h2><p>{{ selectedDailyReport.id }}</p></div><a-tag :color="dailyReportStatusColors[selectedDailyReport.status]">{{ selectedDailyReport.status }}</a-tag></header><div class="daily-report-detail-meta"><span>发送人<b>{{ selectedDailyReport.sender }}</b></span><span>发送时间<b>{{ selectedDailyReport.sentAt }}</b></span><span>日报工时<b>{{ selectedDailyReport.hours }}h</b></span><span>任务数量<b>{{ selectedDailyReport.tasks?.length || 0 }} 项</b></span></div><section class="daily-report-task-entry-detail"><header><strong>今日完成任务</strong><small>{{ selectedDailyReport.date }} · 每条任务独立登记</small></header><div v-for="entry in selectedDailyReportTaskEntries" :key="entry.id" class="daily-report-task-entry"><div class="daily-report-task-entry-meta"><strong>{{ entry.title }}</strong><span>{{ entry.hours }}h · {{ phaseByKey(entry.phase)?.code || '其他任务' }}<template v-if="phaseByKey(entry.phase)"> · {{ phaseByKey(entry.phase)?.name }}</template></span></div><p>{{ entry.summary }}</p></div></section><section><header><strong>明日计划</strong></header><p>{{ selectedDailyReport.nextPlan || '暂无计划' }}</p></section></div></template></a-modal>
+    <a-modal :visible="Boolean(selectedDailyReport)" title="日报详情" :footer="false" width="760px" @cancel="selectedDailyReport = null"><template v-if="selectedDailyReport"><div class="daily-report-detail"><header><div><h2>{{ dailyReportDisplayName(selectedDailyReport) }}</h2><p>{{ selectedDailyReport.id }}</p></div><a-tag :color="dailyReportStatusColors[selectedDailyReport.status]">{{ selectedDailyReport.status }}</a-tag></header><div class="daily-report-detail-meta"><span>发送人<b>{{ selectedDailyReport.sender }}</b></span><span>发送时间<b>{{ selectedDailyReport.sentAt }}</b></span><span>日报工时<b>{{ selectedDailyReport.hours }}h</b></span><span>任务数量<b>{{ selectedDailyReport.tasks?.length || 0 }} 项</b></span></div><section class="daily-report-task-entry-detail"><header><strong>今日完成任务</strong><small>{{ selectedDailyReport.date }} · 每条任务独立登记</small></header><div v-for="entry in selectedDailyReportTaskEntries" :key="entry.id" class="daily-report-task-entry"><div class="daily-report-task-entry-meta"><strong>{{ entry.title }}</strong><span><a-tag color="arcoblue">{{ entry.category }}</a-tag>{{ entry.hours }}h · {{ phaseByKey(entry.phase)?.code || '期号未配置' }}<template v-if="phaseByKey(entry.phase)"> · {{ phaseByKey(entry.phase)?.name }}</template></span></div><p v-if="entry.summary">备注：{{ entry.summary }}</p></div></section><section><header><strong>明日计划</strong></header><p>{{ selectedDailyReport.nextPlan || '暂无计划' }}</p></section></div></template></a-modal>
+    <OnlineFileEditor
+      v-if="onlineFileEditorVisible"
+      :key="`${onlineFileEditorPhaseKey}-${onlineFileEditorFileId || 'new'}-${phaseOnlineFileDraft.type}`"
+      :model-value="phaseOnlineFileDraft"
+      :phase="onlineFileEditorPhase"
+      :saved-snapshot="onlineFileSavedSnapshot"
+      @save="savePhaseOnlineFile"
+      @close="closePhaseOnlineFileEditor"
+    />
   </div>
 </template>
