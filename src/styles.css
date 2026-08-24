@@ -1312,10 +1312,11 @@ h1, h2, h3, p { margin: 0; }
 
 @media (max-width: 1180px) {
   :root { --sidebar-width: 276px; }
-  .global-header { grid-template-columns: var(--sidebar-width) minmax(440px, 1fr) auto; padding: 0 14px; }
+  .global-header { grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto; padding: 0 14px; }
   .global-nav.arco-menu-horizontal .arco-menu-item { min-width: 60px; margin: 0; padding: 0 8px; }
-  .header-actions > .arco-btn span:not(.arco-btn-icon), .header-actions .arco-badge .arco-btn span:not(.arco-btn-icon) { display: none; }
-  .profile-trigger { min-width: 104px; }
+  .header-actions > .arco-btn, .header-actions .arco-badge .arco-btn { width: 36px; min-width: 36px; padding: 0; font-size: 0; }
+  .header-actions > .arco-btn .arco-icon, .header-actions .arco-badge .arco-btn .arco-icon { font-size: 16px; }
+  .profile-trigger { min-width: 0; }
   .profile-trigger small { display: none; }
   .project-layout { grid-template-columns: minmax(210px, 18fr) minmax(250px, 22fr) minmax(0, 60fr); }
   .project-layout.customer-collapsed { grid-template-columns: 48px minmax(250px, 22fr) minmax(0, 60fr); }
