@@ -429,12 +429,7 @@ const isManagementRole = computed(() => accountRole.value === "management");
 const isProjectManagerRole = computed(() => accountRole.value === "project-manager");
 const isExternalRole = computed(() => accountRole.value === "external");
 const isWorkspaceAdminRole = computed(() => isManagementRole.value || isProjectManagerRole.value);
-const dashboardRoleDescription = computed(() => ({
-  management: "查看全局项目盘面、团队负荷与交付风险。",
-  "project-manager": "聚焦所辖期号的交付状态、团队负荷与任务风险。",
-  developer: "聚焦分配给我的任务、截止时间和日报工时。",
-  external: "只显示分配给自己的任务、截止提醒和工时记录。",
-}[accountRole.value]));
+const dashboardRoleDescription = computed(() => "聚焦可见期号的交付状态、任务进展与截止风险。");
 const isRolePersonalView = computed(() => !isManagementRole.value);
 const dashboardPendingTasks = computed(() => dashboardTaskRows.value.filter(task => task.status === "待确认" && task.confirmer === accountProfile.value.nickname));
 const dashboardRecordStats = computed(() => {
@@ -515,7 +510,7 @@ const dashboardManagementStats = computed(() => [
   { label: "完成率", value: dashboardStats.value.completionRate, unit: "%", ratio: dashboardStats.value.completionRate, destination: "统计" },
   { label: "延期率", value: dashboardStats.value.delayRate, unit: "%", ratio: dashboardStats.value.delayRate, tone: "danger", destination: "统计" },
 ]);
-const dashboardWorkbenchStats = computed(() => (isProjectManagerRole.value ? dashboardProjectManagerStats.value : dashboardManagementStats.value));
+const dashboardWorkbenchStats = computed(() => dashboardProjectManagerStats.value);
 const dashboardPersonalReportSummary = computed(() => {
   const currentUser = accountProfile.value.nickname;
   const start = new Date(`${dashboardDate.value}T00:00:00`);
@@ -3005,11 +3000,11 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
         <div class="workbench-heading-actions"><a-button v-if="isManagementRole" type="primary" @click="activeNav = '项目'"><IconApps />进入项目</a-button></div>
       </header>
 
-      <section v-if="isWorkspaceAdminRole" class="workbench-management-reference">
+      <section v-if="true" class="workbench-management-reference">
         <section class="workbench-reference-stats">
           <button v-for="item in dashboardWorkbenchStats" :key="item.label" :class="{ 'is-danger': item.tone === 'danger' }" @click="activeNav = item.destination"><span>{{ item.label }}</span><strong>{{ item.value }}<small>{{ item.unit }}</small></strong><i :style="{ width: `${item.ratio}%` }"></i></button>
         </section>
-        <section class="workbench-reference-duo workbench-management-duo">
+        <section v-if="false" class="workbench-reference-duo workbench-management-duo">
           <section class="workbench-reference-panel">
             <header><div><h2>{{ isProjectManagerRole ? '我的日报' : '日报发送情况' }}</h2><span>{{ isProjectManagerRole ? '提交状态与连续性' : '应发 = 当前启用成员' }}</span></div><a-button type="text" @click="activeNav = '日报'">{{ isProjectManagerRole ? '去写日报' : '查看日报' }}</a-button></header>
             <template v-if="isProjectManagerRole">
@@ -3027,11 +3022,11 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
           <section class="workbench-reference-panel"><header><div><h2>团队负荷</h2><span>{{ isProjectManagerRole ? '所辖期号成员 · 按未完成任务与工时' : '按未完成任务与登记工时汇总' }}</span></div><a-button type="text" @click="activeNav = '统计'">查看团队</a-button></header><div class="workbench-load-list"><div v-for="row in statsMemberRows.slice(0, 5)" :key="row.name" class="workbench-load-row"><a-avatar :size="26">{{ row.name.slice(0, 1) }}</a-avatar><strong>{{ row.name }}</strong><span class="workbench-load-track"><i :style="{ width: `${Math.min(row.tasks * 18, 100)}%` }"></i></span><small>{{ row.tasks }} 项 · {{ row.hours }}h<em v-if="row.overdue"> · {{ row.overdue }} 项逾期</em></small></div><a-empty v-if="!statsMemberRows.length" description="暂无团队负荷" /></div></section>
         </section>
         <section class="workbench-reference-panel workbench-reference-table-panel">
-          <div v-if="isProjectManagerRole" class="workbench-task-risk-strip">今日到期 <b>{{ dashboardTaskRisk.dueToday }}</b> 项 · 已逾期 <b class="is-danger">{{ dashboardTaskRisk.overdue }}</b> 项，建议优先处理截止风险</div>
-          <header><div><h2>任务列表</h2><span>{{ isProjectManagerRole ? '与我相关 · 按优先级排序' : '按优先级与创建时间排序 · 可直接处理状态' }}</span></div><a-button type="text" @click="activeNav = '任务'">查看全部</a-button></header>
+          <div class="workbench-task-risk-strip">今日到期 <b>{{ dashboardTaskRisk.dueToday }}</b> 项 · 已逾期 <b class="is-danger">{{ dashboardTaskRisk.overdue }}</b> 项，建议优先处理截止风险</div>
+          <header><div><h2>任务列表</h2><span>按当前权限展示 · 按优先级排序</span></div><a-button type="text" @click="activeNav = '任务'">查看全部</a-button></header>
           <div class="workbench-reference-table workbench-management-task-table"><div class="workbench-reference-table-row is-heading"><span aria-hidden="true"></span><span>优先级</span><span>任务名称</span><span>所属期号</span><span>负责人</span><span>状态</span><span>截止时间</span></div><div v-for="task in dashboardTasks" :key="task.id" class="workbench-reference-table-row" :class="{ 'is-overdue': task.due < dashboardDate }" role="button" tabindex="0" @click="openTaskFromRow(task)" @keydown="handleTaskRowKeydown($event, task)"><span class="workbench-task-table-check"><a-checkbox :model-value="task.status === '已完成'" :indeterminate="task.status === '待确认'" :disabled="!taskChecklistAction(task)" :aria-label="`${task.title}：${taskChecklistLabel(task)}`" @click.stop @change="handleTaskChecklistChange(task)" /></span><span><a-tag :color="priorityColors[task.priority]">{{ task.priority }}</a-tag></span><span><strong>{{ task.title }}</strong><small>{{ task.id }} · {{ task.module }}</small></span><span>{{ phaseByKey(task.phase)?.code || '期号未配置' }}<small>{{ phaseByKey(task.phase)?.name || '待补充' }}</small></span><span>{{ task.owner }}</span><span><a-tag :color="phaseStatusColor(task.status)">{{ task.status }}</a-tag></span><span :class="{ 'is-danger': task.due < dashboardDate }">{{ taskDueLabel(task) }}</span></div><a-empty v-if="!dashboardTasks.length" description="暂无相关任务" /></div>
         </section>
-        <section class="workbench-reference-panel workbench-reference-table-panel"><header><div><h2>期号列表</h2><span>{{ isProjectManagerRole ? '我负责及参与的期号' : '按当前账号权限展示' }}</span></div><a-button type="text" @click="activeNav = '项目'">查看项目 <IconArrowRise /></a-button></header><div class="workbench-reference-table workbench-phase-reference-table"><div class="workbench-reference-table-row is-heading"><span>期号</span><span>项目</span><span>进度</span><span>截止完成时间</span><span>任务数</span><span>负责人</span><span>状态</span></div><button v-for="phase in dashboardPhaseRows" :key="phase.key" class="workbench-reference-table-row" :class="{ 'is-overdue': phase.status === '延期' }" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.code }}</strong><small>{{ phase.name }}</small></span><span>{{ phase.projectName }}</span><span class="workbench-progress-cell"><i><em :style="{ width: `${phaseProgress(phase)}%` }"></em></i><b>{{ phaseProgress(phase) }}%</b></span><span>{{ phase.dates ? phase.dates.split(/\s*至\s*/).pop() : '未设置' }}</span><span>{{ phaseTaskCount(phase) }} 项</span><span>{{ phase.owner }}</span><span><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></span></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section>
+        <section class="workbench-reference-panel workbench-reference-table-panel"><header><div><h2>期号列表</h2><span>按当前权限展示可见期号</span></div><a-button type="text" @click="activeNav = '项目'">查看项目 <IconArrowRise /></a-button></header><div class="workbench-reference-table workbench-phase-reference-table"><div class="workbench-reference-table-row is-heading"><span>期号</span><span>项目</span><span>进度</span><span>截止完成时间</span><span>任务数</span><span>负责人</span><span>状态</span></div><button v-for="phase in dashboardPhaseRows" :key="phase.key" class="workbench-reference-table-row" :class="{ 'is-overdue': phase.status === '延期' }" @click="selectedPhaseKey = phase.key; activeNav = '项目'"><span><strong>{{ phase.code }}</strong><small>{{ phase.name }}</small></span><span>{{ phase.projectName }}</span><span class="workbench-progress-cell"><i><em :style="{ width: `${phaseProgress(phase)}%` }"></em></i><b>{{ phaseProgress(phase) }}%</b></span><span>{{ phase.dates ? phase.dates.split(/\s*至\s*/).pop() : '未设置' }}</span><span>{{ phaseTaskCount(phase) }} 项</span><span>{{ phase.owner }}</span><span><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag></span></button><a-empty v-if="!dashboardPhaseRows.length" description="暂无可见期号" /></div></section>
       </section>
 
       <template v-else-if="isProjectManagerRole">
