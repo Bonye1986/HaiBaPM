@@ -811,7 +811,7 @@ watch(workHoursProject, () => { workHoursMember.value = "全部成员"; });
 const filteredTeamMembers = computed(() => {
   const keyword = teamKeyword.value.trim().toLowerCase();
   return teamDirectory.value.filter(member => (
-    (teamTypeFilter.value === "全部类型" || (teamTypeFilter.value === "外部协作成员" ? ["外部协作成员", "外包成员"].includes(member.type) : member.type === teamTypeFilter.value))
+    (teamTypeFilter.value === "全部类型" || (teamTypeFilter.value === "外部协作成员" ? ["外部协作成员", "外包成员", "项目客户"].includes(member.type) : member.type === teamTypeFilter.value))
     && (!keyword || `${member.name}${member.account}${member.phone}${member.role}`.toLowerCase().includes(keyword))
   ));
 });
@@ -3093,15 +3093,14 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
       <header class="team-page-heading">
         <div>
           <h1>团队</h1>
-          <p>管理内部成员、外部协作成员和项目客户账号、登录状态与系统权限。</p>
+          <p>管理内部成员和外部协作成员账号、登录状态与系统权限。</p>
         </div>
       </header>
       <section class="team-page-toolbar" aria-label="成员筛选">
         <a-radio-group v-model="teamTypeFilter" type="button">
           <a-radio value="全部类型">全部成员 <b>{{ teamDirectory.length }}</b></a-radio>
           <a-radio value="内部成员">内部成员 <b>{{ teamDirectory.filter(member => member.type === '内部成员').length }}</b></a-radio>
-          <a-radio value="外部协作成员">外部协作成员 <b>{{ teamDirectory.filter(member => ['外部协作成员', '外包成员'].includes(member.type)).length }}</b></a-radio>
-          <a-radio value="项目客户">项目客户 <b>{{ teamDirectory.filter(member => member.type === '项目客户').length }}</b></a-radio>
+          <a-radio value="外部协作成员">外部协作成员 <b>{{ teamDirectory.filter(member => ['外部协作成员', '外包成员', '项目客户'].includes(member.type)).length }}</b></a-radio>
         </a-radio-group>
         <a-input v-model="teamKeyword" class="team-page-search" allow-clear placeholder="搜索姓名、账号或职务"><template #prefix><IconSearch /></template></a-input>
       </section>
@@ -3111,7 +3110,7 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
           <div class="team-member-row team-member-row-heading"><span>成员</span><span>成员类型</span><span>职务</span><span>联系方式</span><span>权限</span><span>状态</span><span>操作</span></div>
           <div v-for="member in pagedTeamMembers" :key="member.id" class="team-member-row">
             <span class="team-member-identity"><a-avatar :size="34">{{ member.name.slice(0, 1) }}</a-avatar><span><strong>{{ member.name }}</strong><small>{{ member.account }}</small></span></span>
-            <span><a-tag :color="member.type === '项目客户' ? 'purple' : (['外部协作成员', '外包成员'].includes(member.type) ? 'orange' : 'arcoblue')">{{ member.type === '外包成员' ? '外部协作成员' : member.type }}</a-tag></span>
+            <span><a-tag :color="['外部协作成员', '外包成员', '项目客户'].includes(member.type) ? 'orange' : 'arcoblue'">{{ ['外部协作成员', '外包成员', '项目客户'].includes(member.type) ? '外部协作成员' : member.type }}</a-tag></span>
             <span>{{ member.role }}</span>
             <span><strong>{{ member.phone || '未填写' }}</strong><small>加入于 {{ member.joinedAt }}</small></span>
             <span class="team-member-permissions"><a-tag v-for="permission in member.permissions.slice(0, 3)" :key="permission" color="gray">{{ permission }}</a-tag><small v-if="member.permissions.length > 3">+{{ member.permissions.length - 3 }}</small></span>
@@ -3526,7 +3525,7 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
       <section class="profile-settings-section"><header><strong>登录安全</strong><span>定期更新密码可以降低账号风险</span></header><div class="profile-security-list"><div><span class="profile-security-icon password"><IconLock /></span><span><b>登录密码</b><small>已设置，修改后请使用新密码登录</small></span><a-tag color="green">已设置</a-tag><a-button type="outline" size="small" @click="openPasswordModal">修改密码</a-button></div></div></section>
       <template #footer><div class="profile-editor-footer"><a-button @click="profileDrawerVisible = false">取消</a-button><a-button type="primary" @click="saveProfile">保存</a-button></div></template>
     </a-modal>
-    <a-modal v-model:visible="teamMemberModalVisible" :title="teamMemberEditingId ? '编辑成员账号' : '添加成员账号'" ok-text="保存" cancel-text="取消" :on-before-ok="saveTeamMember"><a-form layout="vertical"><div class="form-grid"><a-form-item label="姓名" required><a-input v-model="teamMemberDraft.name" allow-clear placeholder="填写成员姓名" /></a-form-item><a-form-item label="成员类型" required><a-select v-model="teamMemberDraft.type"><a-option value="内部成员">内部成员</a-option><a-option value="外部协作成员">外部协作成员</a-option><a-option value="项目客户">项目客户</a-option></a-select></a-form-item><a-form-item label="账号" required><a-input v-model="teamMemberDraft.account" allow-clear placeholder="邮箱或成员账号" /></a-form-item><a-form-item label="手机号"><a-input v-model="teamMemberDraft.phone" allow-clear maxlength="11" placeholder="11 位手机号" /></a-form-item><a-form-item label="状态" required><a-select v-model="teamMemberDraft.status"><a-option value="启用">启用</a-option><a-option value="禁用">禁用</a-option></a-select></a-form-item></div><a-form-item label="职务" required><a-input v-model="teamMemberDraft.role" allow-clear placeholder="例如：前端开发、客户联系人" /></a-form-item><a-form-item :label="teamMemberEditingId ? '登录密码（留空不修改）' : '登录密码'" :required="!teamMemberEditingId"><a-input-password v-model="teamMemberDraft.password" allow-clear autocomplete="new-password" placeholder="至少 8 个字符"><template #prefix><IconLock /></template></a-input-password></a-form-item><div class="team-member-binding-fields"><span><b>微信绑定</b><small>{{ teamMemberDraft.wechatBound ? '已绑定，可使用微信授权登录' : '未绑定' }}</small></span><a-switch v-model="teamMemberDraft.wechatBound" /><span><b>企业微信绑定</b><small>{{ teamMemberDraft.wecomBound ? '已绑定，可使用企业微信授权登录' : '未绑定' }}</small></span><a-switch v-model="teamMemberDraft.wecomBound" /></div><p class="team-member-modal-note"><IconInfoCircle />新成员默认分配“工作台”权限，可在成员列表中继续设置权限。</p></a-form></a-modal>
+    <a-modal v-model:visible="teamMemberModalVisible" :title="teamMemberEditingId ? '编辑成员账号' : '添加成员账号'" ok-text="保存" cancel-text="取消" :on-before-ok="saveTeamMember"><a-form layout="vertical"><div class="form-grid"><a-form-item label="姓名" required><a-input v-model="teamMemberDraft.name" allow-clear placeholder="填写成员姓名" /></a-form-item><a-form-item label="成员类型" required><a-select v-model="teamMemberDraft.type"><a-option value="内部成员">内部成员</a-option><a-option value="外部协作成员">外部协作成员</a-option></a-select></a-form-item><a-form-item label="账号" required><a-input v-model="teamMemberDraft.account" allow-clear placeholder="邮箱或成员账号" /></a-form-item><a-form-item label="手机号"><a-input v-model="teamMemberDraft.phone" allow-clear maxlength="11" placeholder="11 位手机号" /></a-form-item><a-form-item label="状态" required><a-select v-model="teamMemberDraft.status"><a-option value="启用">启用</a-option><a-option value="禁用">禁用</a-option></a-select></a-form-item></div><a-form-item label="职务" required><a-input v-model="teamMemberDraft.role" allow-clear placeholder="例如：前端开发、客户联系人" /></a-form-item><a-form-item :label="teamMemberEditingId ? '登录密码（留空不修改）' : '登录密码'" :required="!teamMemberEditingId"><a-input-password v-model="teamMemberDraft.password" allow-clear autocomplete="new-password" placeholder="至少 8 个字符"><template #prefix><IconLock /></template></a-input-password></a-form-item><div class="team-member-binding-fields"><span><b>微信绑定</b><small>{{ teamMemberDraft.wechatBound ? '已绑定，可使用微信授权登录' : '未绑定' }}</small></span><a-switch v-model="teamMemberDraft.wechatBound" /><span><b>企业微信绑定</b><small>{{ teamMemberDraft.wecomBound ? '已绑定，可使用企业微信授权登录' : '未绑定' }}</small></span><a-switch v-model="teamMemberDraft.wecomBound" /></div><p class="team-member-modal-note"><IconInfoCircle />新成员默认分配“工作台”权限，可在成员列表中继续设置权限。</p></a-form></a-modal>
     <a-modal v-model:visible="teamPermissionsModalVisible" title="权限设置" ok-text="保存权限" cancel-text="取消" :on-before-ok="saveTeamPermissions"><div v-if="teamPermissionsMember" class="team-permission-modal"><header><a-avatar :size="38">{{ teamPermissionsMember.name.slice(0, 1) }}</a-avatar><div><strong>{{ teamPermissionsMember.name }}</strong><small>{{ teamPermissionsMember.account }} · {{ teamPermissionsMember.type }}</small></div></header><a-checkbox-group v-model="teamPermissionsDraft" class="team-permission-options"><a-checkbox v-for="permission in teamPermissionOptions" :key="permission" :value="permission">{{ permission }}</a-checkbox></a-checkbox-group><p class="team-member-modal-note"><IconInfoCircle />权限变更会影响该成员可访问的页面和操作范围。</p></div></a-modal>
     <a-modal v-model:visible="projectStageModalVisible" :title="projectStageEditingId ? '编辑项目阶段' : '添加项目类型'" width="720px" ok-text="保存配置" cancel-text="取消" :on-before-ok="saveProjectStageConfig">
       <a-form class="project-stage-config-form" layout="vertical">
