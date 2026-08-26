@@ -3163,6 +3163,8 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
         <div class="sb-title">
           <b>客户 / 项目 + 期号</b>
           <div class="sidebar-title-actions">
+            <a-tooltip :content="projectView === 'tree' ? '当前为项目树视图' : '切换为项目树视图'"><a-button class="sidebar-icon-button" :class="{ active: projectView === 'tree' }" type="text" size="mini" aria-label="项目树视图" :aria-pressed="projectView === 'tree'" @click="projectView = 'tree'"><IconMindMapping /></a-button></a-tooltip>
+            <a-tooltip :content="projectView === 'list' ? '当前为期号列表视图' : '切换为期号列表视图'"><a-button class="sidebar-icon-button" :class="{ active: projectView === 'list' }" type="text" size="mini" aria-label="期号列表视图" :aria-pressed="projectView === 'list'" @click="projectView = 'list'"><IconList /></a-button></a-tooltip>
             <a-tooltip :content="phaseStatus === '全部状态' ? '筛选期号状态' : `当前筛选：${phaseStatus}`">
               <a-dropdown trigger="click" @select="status => phaseStatus = status">
                 <a-button class="sidebar-icon-button" :class="{ active: phaseStatus !== '全部状态' }" type="text" size="mini" :aria-label="`筛选期号状态，当前${phaseStatus === '全部状态' ? '全部' : phaseStatus}`"><IconFilter /></a-button>
@@ -3178,11 +3180,11 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
         </div>
         <div class="sb-search"><IconSearch /><input v-model="navigatorKeyword" placeholder="搜索客户、项目或期号"><button v-if="navigatorKeyword" class="sb-search-clear" type="button" aria-label="清空搜索" @click="navigatorKeyword = ''"><IconClose /></button></div>
         <div class="sb-cols">
-          <div class="sb-col-customer">
+          <div v-if="projectView === 'tree'" class="sb-col-customer">
             <div v-for="customer in visibleCustomers" :key="customer.key" class="cust-item" :class="{ active: selectedCustomerKey === customer.key }" :title="`${customer.code}-${customer.name}`" @click="selectCustomer(customer)"><span class="no">{{ customer.code }}-</span><span class="customer-name">{{ customer.name }}</span></div>
             <div v-if="!visibleCustomers.length" class="tree-empty">没有匹配的客户</div>
           </div>
-          <div class="sb-col-tree">
+          <div class="sb-col-tree" :class="{ 'is-list-view': projectView === 'list' }">
             <template v-if="projectView === 'tree'">
               <template v-for="customer in filteredProjects" :key="customer.key">
                 <template v-for="project in customer.projects" :key="project.key">
@@ -3194,7 +3196,7 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
               </template>
               <div v-if="!filteredProjects.length" class="tree-empty">{{ phaseStatus === '全部状态' ? '没有匹配的项目' : `没有${phaseStatus}的期号` }}<template v-if="phaseStatus === '全部状态' && !normalizedKeyword && customerStatusCounts['全部状态'] === 0"><br><b class="tree-empty-action" @click="openProjectCreateModal"><IconPlus />新建第一个项目</b></template></div>
             </template>
-            <section v-else class="phase-list-section"><div v-for="group in phaseListGroups" :key="group.key" class="phase-list-group"><header class="phase-list-project-header"><span class="phase-list-project-identity"><IconFolder /><span><strong><b>{{ group.customerCode }}-{{ group.projectCode }}</b>{{ group.projectName }}</strong><small>项目负责人：{{ group.projectOwner }}</small></span></span><a-dropdown trigger="click" @select="action => openPhaseListProjectMenu(group, action)"><a-button class="phase-list-project-more" type="text" size="mini" aria-label="项目操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit-project"><IconEdit />编辑项目</a-doption><a-doption value="delete-project" class="tree-danger-option"><IconDelete />删除项目</a-doption></template></a-dropdown></header><div class="phase-list-items"><div v-for="phase in group.phases" :key="phase.key" class="phase-list-card" :class="{ active: phase.key === selectedPhaseKey }" role="button" tabindex="0" @click="selectPhase(phase)"><div class="phase-list-main"><div class="phase-list-phase"><span class="phase-list-code">{{ phase.code }}</span><strong>{{ phase.name }}</strong></div><div class="phase-list-meta"><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag><span>期号负责人：{{ phase.owner }}</span></div></div><a-dropdown trigger="click" @select="action => openPhaseListMenu(phase, action)"><a-button class="phase-list-more" type="text" size="mini" aria-label="期号操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit-phase"><IconEdit />编辑期号</a-doption><a-doption value="delete-phase" class="tree-danger-option"><IconDelete />删除期号</a-doption></template></a-dropdown></div></div></div><a-empty v-if="!phaseListGroups.length" description="没有匹配的期号" /></section>
+            <section v-else class="phase-list-section phase-list-flat"><div v-for="phase in phaseListData" :key="phase.key" class="phase-list-card phase-list-flat-card" :class="{ active: phase.key === selectedPhaseKey }" role="button" tabindex="0" @click="selectPhase(phase)"><div class="phase-list-main"><div class="phase-list-phase"><span class="phase-list-code">{{ phase.code }}</span><strong>{{ phase.name }}</strong></div><div class="phase-list-meta"><a-tag :color="phaseStatusColor(phase.status)">{{ phase.status }}</a-tag><span>期号负责人：{{ phase.owner }}</span></div></div><a-dropdown trigger="click" @select="action => openPhaseListMenu(phase, action)"><a-button class="phase-list-more" type="text" size="mini" aria-label="期号操作" @click.stop><IconMore /></a-button><template #content><a-doption value="edit-phase"><IconEdit />编辑期号</a-doption><a-doption value="delete-phase" class="tree-danger-option"><IconDelete />删除期号</a-doption></template></a-dropdown></div><a-empty v-if="!phaseListData.length" description="没有匹配的期号" /></section>
           </div>
         </div>
       </div>
