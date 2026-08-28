@@ -1494,7 +1494,6 @@ const { page: phaseActivityPage, pageSize: phaseActivityPageSize, rows: pagedPha
 const { page: taskListPage, pageSize: taskListPageSize, rows: pagedTaskPageRows } = createListPagination(taskPageRows);
 const { page: dailyReportPage, pageSize: dailyReportPageSize, rows: pagedDailyReports } = createListPagination(dailyReportRows);
 const { page: dailyDetailPage, pageSize: dailyDetailPageSize, rows: pagedDailyDetailRows } = createListPagination(dailyDetailRows);
-const { page: workHoursPhasePage, pageSize: workHoursPhasePageSize, rows: pagedWorkHoursPhaseRows } = createListPagination(workHoursPhaseRows);
 const { page: workHoursDetailPage, pageSize: workHoursDetailPageSize, rows: pagedWorkHoursDetailRows } = createListPagination(workHoursFilteredLogs);
 const { page: teamPage, pageSize: teamPageSize, rows: pagedTeamMembers } = createListPagination(filteredTeamMembers);
 const { page: projectFilePage, pageSize: projectFilePageSize, rows: pagedProjectFiles } = createListPagination(visibleProjectFiles);
@@ -1742,11 +1741,22 @@ function handleNavigation(key) {
   activeNav.value = "项目";
   notify(`${key}模块将在后续设计`);
 }
-function completeLogin(successMessage) {
+function completeLogin(successMessage, member = null) {
   localStorage.removeItem(authStorageKey);
   sessionStorage.removeItem(authStorageKey);
   const storage = loginDraft.value.remember ? localStorage : sessionStorage;
   storage.setItem(authStorageKey, "authenticated");
+  if (member) {
+    accountProfile.value = {
+      ...accountProfile.value,
+      account: member.account,
+      phone: member.phone || "",
+      nickname: member.name,
+      position: member.role || "项目成员",
+      wecomBound: Boolean(member.wecomBound),
+    };
+    profileDraft.value = { ...accountProfile.value };
+  }
   isAuthenticated.value = true;
   activeNav.value = "工作台";
   loginDraft.value.password = "";
@@ -1776,6 +1786,25 @@ async function sendLoginVerificationCode() {
   }
 }
 async function handleLogin() {
+  if (loginMode.value === "internal") {
+    const account = loginDraft.value.account.trim();
+    const password = loginDraft.value.password;
+    if (!account) { loginError.value = "请输入登录账号"; return; }
+    if (!password) { loginError.value = "请输入登录密码"; return; }
+    if (password.length < 8) { loginError.value = "登录密码至少需要 8 个字符"; return; }
+    const member = teamDirectory.value.find(item => item.type === "内部成员" && item.status !== "禁用" && item.account.toLowerCase() === account.toLowerCase());
+    if (!member) { loginError.value = "账号不存在或已被禁用"; return; }
+    if (member.password && member.password !== password) { loginError.value = "账号或密码错误"; return; }
+    loginLoading.value = true;
+    loginError.value = "";
+    try {
+      await new Promise(resolve => window.setTimeout(resolve, 350));
+      completeLogin("账号密码登录成功", member);
+    } finally {
+      loginLoading.value = false;
+    }
+    return;
+  }
   const phone = loginDraft.value.phone.trim();
   const verificationCode = loginDraft.value.verificationCode.trim();
   if (!/^1[3-9]\d{9}$/.test(phone)) { loginError.value = "请输入邀请时填写的 11 位手机号"; return; }
@@ -3806,9 +3835,18 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
         <a-radio value="external">外部用户</a-radio>
       </a-radio-group>
       <section v-if="loginMode === 'internal'" class="enterprise-login" aria-label="内部成员登录">
-        <div class="login-method-summary"><span class="login-method-icon wecom"><IconSafe /></span><span><strong>企业微信授权登录</strong><small>使用公司企业微信身份进入系统</small></span></div>
-        <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
-        <a-button class="login-submit" type="primary" size="large" long :loading="socialLoginProvider === '企业微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('企业微信')"><IconSafe />企业微信授权登录</a-button>
+        <form class="login-form" @submit.prevent="handleLogin">
+          <p class="login-form-intro">使用管理员为内部成员配置的账号和密码登录</p>
+          <label for="login-account">账号</label>
+          <a-input id="login-account" v-model="loginDraft.account" size="large" allow-clear autocomplete="username" placeholder="请输入成员账号" @input="loginError = ''"><template #prefix><IconUser /></template></a-input>
+          <label for="login-password">密码</label>
+          <a-input-password id="login-password" v-model="loginDraft.password" size="large" allow-clear autocomplete="current-password" placeholder="请输入登录密码" @input="loginError = ''"><template #prefix><IconLock /></template></a-input-password>
+          <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
+          <div class="login-options"><a-checkbox v-model="loginDraft.remember">保持登录</a-checkbox><span>密码至少 8 个字符</span></div>
+          <a-button class="login-submit" type="primary" html-type="submit" size="large" long :loading="loginLoading">账号密码登录</a-button>
+        </form>
+        <div class="login-divider">或使用企业微信</div>
+        <a-button class="login-submit login-wecom-submit" type="outline" size="large" long :loading="socialLoginProvider === '企业微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('企业微信')"><IconSafe />企业微信授权登录</a-button>
       </section>
       <form v-else class="login-form" @submit.prevent="handleLogin">
         <p class="login-form-intro">仅限已收到项目邀请的外包人员或客户登录</p>
@@ -3939,8 +3977,7 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
     </main>
     <main v-else-if="activeNav === '工时'" class="work-hours-page">
       <section class="work-hours-stat-grid"><article><span>项目期号数量</span><strong>{{ workHoursStats.phases }}个</strong></article><article><span>工时</span><strong>{{ workHoursStats.totalHours }}h</strong><small>筛选后的明细</small></article><article><span>参与成员</span><strong>{{ workHoursStats.members }}</strong><small>有工时记录的成员</small></article><article><span>人均工时</span><strong>{{ workHoursStats.average }}h</strong><small>按参与成员计算</small></article></section>
-      <section class="work-hours-filters"><a-input v-model="workHoursKeyword" class="work-hours-search" allow-clear placeholder="搜索期号名称"><template #prefix><IconSearch /></template></a-input><a-range-picker v-model="workHoursDateRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /><a-select v-model="workHoursProject" class="work-hours-project-filter" allow-search aria-label="按项目筛选工时"><a-option value="全部项目">全部项目</a-option><a-option v-for="project in statsProjectOptions" :key="project.value" :value="project.value">{{ project.label }}</a-option></a-select><a-select v-model="workHoursMember" class="work-hours-member-filter" allow-search aria-label="按成员筛选工时"><a-option value="全部成员">全部成员</a-option><a-option v-for="member in workHoursMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-button class="work-hours-export" type="primary" :disabled="!workHoursFilteredLogs.length" @click="exportWorkHours"><IconExport />导出工时</a-button></section>
-      <section class="work-hours-panel"><header><h2>期号工时汇总 <span class="work-hours-panel-hint">共 {{ workHoursFilteredLogs.length }} 条日报任务 · 按期号汇总显示</span></h2></header><div class="work-hours-table"><div class="work-hours-row work-hours-row-heading"><span>项目名称</span><span>期号 / 期号名称</span><span>总工时</span><span>成员工时</span><span>最近更新</span></div><button v-for="phase in pagedWorkHoursPhaseRows" :key="phase.key" class="work-hours-row" @click="openWorkHoursPhaseReports(phase)"><span><strong>{{ phase.projectName }}</strong></span><span class="work-hours-phase-code"><strong>{{ phase.code }}<em>{{ phase.status }}</em></strong><small>{{ phase.name }}</small></span><span><strong>{{ phase.hours }}h</strong><small>{{ phase.logCount }} 条记录</small></span><span class="work-hours-member-breakdown"><template v-if="phase.memberHours.length"><small v-for="member in phase.memberHours" :key="member.name">{{ member.name }} {{ member.hours }}h</small></template><small v-else>暂无记录</small></span><span>{{ phase.latest || '暂无记录' }}</span></button><a-empty v-if="!workHoursPhaseRows.length" description="暂无符合条件的期号" /></div><PhaseListPagination v-model:page="workHoursPhasePage" v-model:page-size="workHoursPhasePageSize" :total="workHoursPhaseRows.length" /></section>
+      <section class="work-hours-filters"><a-input v-model="workHoursKeyword" class="work-hours-search" allow-clear placeholder="搜索合同号"><template #prefix><IconSearch /></template></a-input><a-range-picker v-model="workHoursDateRange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" :placeholder="['开始日期', '结束日期']" allow-clear /><a-select v-model="workHoursProject" class="work-hours-project-filter" allow-search aria-label="按项目筛选工时"><a-option value="全部项目">全部项目</a-option><a-option v-for="project in statsProjectOptions" :key="project.value" :value="project.value">{{ project.label }}</a-option></a-select><a-select v-model="workHoursMember" class="work-hours-member-filter" allow-search aria-label="按成员筛选工时"><a-option value="全部成员">全部成员</a-option><a-option v-for="member in workHoursMembers" :key="member" :value="member">{{ member }}</a-option></a-select><a-button class="work-hours-export" type="primary" :disabled="!workHoursFilteredLogs.length" @click="exportWorkHours"><IconExport />导出工时</a-button></section>
       <section class="work-hours-panel work-hours-detail-panel"><header><h2>工时明细 <span class="work-hours-panel-hint">来源于日报任务，点击记录查看完整日报</span></h2></header><div class="work-hours-detail-table"><div class="work-hours-detail-row work-hours-detail-row-heading"><span>日期</span><span>期号</span><span>成员</span><span>工时</span><span>工作内容</span></div><button v-for="log in pagedWorkHoursDetailRows" :key="log.id" class="work-hours-detail-row" @click="openWorkHoursDailyReport(log.report)"><span>{{ log.date }}</span><span><strong>{{ log.phase?.code }}</strong><small>{{ log.phase?.name }}</small></span><span>{{ log.member }}</span><strong>{{ log.hours }}h</strong><span>{{ log.content }}</span></button><a-empty v-if="!workHoursFilteredLogs.length" description="暂无符合条件的工时记录" /></div><PhaseListPagination v-model:page="workHoursDetailPage" v-model:page-size="workHoursDetailPageSize" :total="workHoursFilteredLogs.length" /></section>
     </main>
     <main v-else-if="activeNav === '团队'" class="team-page">
