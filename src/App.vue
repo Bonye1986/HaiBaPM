@@ -3846,7 +3846,6 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
           <a-button class="login-submit" type="primary" html-type="submit" size="large" long :loading="loginLoading">账号密码登录</a-button>
         </form>
         <div class="login-divider">或使用企业微信</div>
-        <div class="login-method-summary"><span class="login-method-icon wecom"><IconSafe /></span><span><strong>企业微信授权登录</strong><small>使用公司企业微信身份进入系统</small></span></div>
         <a-button class="login-submit login-wecom-submit" type="outline" size="large" long :loading="socialLoginProvider === '企业微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('企业微信')"><IconSafe />企业微信授权登录</a-button>
       </section>
       <form v-else class="login-form" @submit.prevent="handleLogin">
