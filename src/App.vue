@@ -20,7 +20,6 @@ const loginLoading = ref(false);
 const loginError = ref("");
 const socialLoginProvider = ref("");
 const loginMode = ref("internal");
-const internalLoginMethod = ref("wecom");
 const loginCodeSending = ref(false);
 const loginCodeCountdown = ref(0);
 let loginCodeTimer = null;
@@ -1791,7 +1790,6 @@ async function handleLogin() {
   if (loginMode.value === "internal") {
     const account = loginDraft.value.account.trim();
     const password = loginDraft.value.password;
-    if (internalLoginMethod.value !== "password") return;
     if (!account) { loginError.value = "请输入登录账号"; return; }
     if (!password) { loginError.value = "请输入登录密码"; return; }
     if (password.length < 8) { loginError.value = "登录密码至少需要 8 个字符"; return; }
@@ -3838,16 +3836,7 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
         <a-radio value="external">外部用户</a-radio>
       </a-radio-group>
       <section v-if="loginMode === 'internal'" class="enterprise-login" aria-label="内部成员登录">
-        <a-radio-group v-model="internalLoginMethod" class="login-method-switch" type="button" size="medium" @change="loginError = ''">
-          <a-radio value="wecom">企业微信授权</a-radio>
-          <a-radio value="password">账号密码登录</a-radio>
-        </a-radio-group>
-        <template v-if="internalLoginMethod === 'wecom'">
-          <div class="login-method-summary"><span class="login-method-icon wecom"><IconSafe /></span><span><strong>企业微信授权登录</strong><small>使用公司企业微信身份进入系统</small></span></div>
-          <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
-          <a-button class="login-submit" type="primary" size="large" long :loading="socialLoginProvider === '企业微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('企业微信')"><IconSafe />企业微信授权登录</a-button>
-        </template>
-        <form v-else class="login-form" @submit.prevent="handleLogin">
+        <form class="login-form" @submit.prevent="handleLogin">
           <p class="login-form-intro">使用管理员为内部成员配置的账号和密码登录</p>
           <label for="login-account">账号</label>
           <a-input id="login-account" v-model="loginDraft.account" size="large" allow-clear autocomplete="username" placeholder="请输入成员账号" @input="loginError = ''"><template #prefix><IconUser /></template></a-input>
@@ -3855,8 +3844,11 @@ function taskDueLabel(task) { return task.due < dashboardDate.value ? `${task.du
           <a-input-password id="login-password" v-model="loginDraft.password" size="large" allow-clear autocomplete="current-password" placeholder="请输入登录密码" @input="loginError = ''"><template #prefix><IconLock /></template></a-input-password>
           <p v-if="loginError" class="login-error" role="alert">{{ loginError }}</p>
           <div class="login-options"><a-checkbox v-model="loginDraft.remember">保持登录</a-checkbox><span>密码至少 8 个字符</span></div>
-          <a-button class="login-submit" type="primary" html-type="submit" size="large" long :loading="loginLoading">登录</a-button>
+          <a-button class="login-submit" type="primary" html-type="submit" size="large" long :loading="loginLoading">账号密码登录</a-button>
         </form>
+        <div class="login-divider">或使用企业微信</div>
+        <div class="login-method-summary"><span class="login-method-icon wecom"><IconSafe /></span><span><strong>企业微信授权登录</strong><small>使用公司企业微信身份进入系统</small></span></div>
+        <a-button class="login-submit login-wecom-submit" type="outline" size="large" long :loading="socialLoginProvider === '企业微信'" :disabled="loginLoading || Boolean(socialLoginProvider)" @click="handleSocialLogin('企业微信')"><IconSafe />企业微信授权登录</a-button>
       </section>
       <form v-else class="login-form" @submit.prevent="handleLogin">
         <p class="login-form-intro">仅限已收到项目邀请的外包人员或客户登录</p>
