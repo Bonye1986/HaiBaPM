@@ -2,17 +2,18 @@
 import { nextTick, onMounted, ref, watch } from "vue";
 import { Message } from "@arco-design/web-vue";
 import {
-  IconBold, IconFile, IconImage, IconItalic, IconOrderedList, IconSound, IconUnorderedList, IconVideoCamera,
+  IconBold, IconFile, IconFullscreen, IconFullscreenExit, IconImage, IconItalic, IconOrderedList, IconSound, IconUnorderedList, IconVideoCamera,
 } from "@arco-design/web-vue/es/icon";
 
 const props = defineProps({ modelValue: { type: String, default: "" }, placeholder: { type: String, default: "" } });
-const emit = defineEmits(["update:modelValue", "blur"]);
+const emit = defineEmits(["update:modelValue", "blur", "media-click"]);
 const editorRef = ref(null);
 const selectionRef = ref(null);
 const imageInputRef = ref(null);
 const audioInputRef = ref(null);
 const videoInputRef = ref(null);
 const fileInputRef = ref(null);
+const fullscreen = ref(false);
 const richTextTags = new Set(["B", "STRONG", "I", "EM", "U", "S", "H1", "H2", "H3", "H4", "H5", "H6", "UL", "OL", "LI", "P", "BR", "DIV", "SPAN", "IMG", "AUDIO", "VIDEO"]);
 const blockedTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "LINK", "META"]);
 const limits = { image: 8 * 1024 * 1024, audio: 20 * 1024 * 1024, video: 50 * 1024 * 1024 };
@@ -110,12 +111,23 @@ function handlePaste(event) {
   document.execCommand("insertText", false, event.clipboardData?.getData("text/plain") || "");
   syncContent();
 }
+function handleMediaClick(event) {
+  const image = event.target.closest?.("img");
+  if (!image || !editorRef.value?.contains(image)) return;
+  event.preventDefault();
+  emit("media-click", { type: "img", src: image.getAttribute("src") || "", alt: image.getAttribute("alt") || "图片" });
+}
+function toggleFullscreen() { fullscreen.value = !fullscreen.value; }
 watch(() => props.modelValue, value => { if (editorRef.value && editorRef.value.innerHTML !== value) editorRef.value.innerHTML = value || ""; });
 onMounted(async () => { await nextTick(); if (editorRef.value) editorRef.value.innerHTML = props.modelValue || ""; });
 </script>
 
 <template>
-  <div class="rich-text-editor">
+  <div class="rich-text-editor" :class="{ 'is-fullscreen': fullscreen }">
+    <div v-if="fullscreen" class="rich-text-fullscreen-heading">
+      <strong>全屏编辑</strong>
+      <a-button type="text" size="mini" aria-label="退出全屏" title="退出全屏" @mousedown.prevent="toggleFullscreen"><IconFullscreenExit />退出全屏</a-button>
+    </div>
     <div class="rich-text-toolbar" role="toolbar" aria-label="文本格式">
       <template v-for="(button, index) in commandButtons" :key="button[0]">
         <a-button type="text" size="mini" :aria-label="button[0]" :title="button[0]" @mousedown.prevent="runCommand(button[2])"><component :is="button[1]" /></a-button>
@@ -125,11 +137,13 @@ onMounted(async () => { await nextTick(); if (editorRef.value) editorRef.value.i
       <a-button type="text" size="mini" aria-label="插入音频" title="插入音频" @mousedown="openPicker($event, 'audio')"><IconSound /></a-button>
       <a-button type="text" size="mini" aria-label="插入视频" title="插入视频" @mousedown="openPicker($event, 'video')"><IconVideoCamera /></a-button>
       <a-button type="text" size="mini" aria-label="插入附件" title="插入附件" @mousedown="openPicker($event, 'file')"><IconFile /></a-button>
+      <span class="rich-text-toolbar-spacer" />
+      <a-button v-if="!fullscreen" type="text" size="mini" aria-label="全屏编辑" title="全屏编辑" @mousedown.prevent="toggleFullscreen"><IconFullscreen /></a-button>
     </div>
     <input ref="imageInputRef" class="rich-text-file-input" type="file" accept="image/*" @change="handleFile($event, 'image')" />
     <input ref="audioInputRef" class="rich-text-file-input" type="file" accept="audio/*" @change="handleFile($event, 'audio')" />
     <input ref="videoInputRef" class="rich-text-file-input" type="file" accept="video/*" @change="handleFile($event, 'video')" />
     <input ref="fileInputRef" class="rich-text-file-input" type="file" @change="handleFile($event, 'file')" />
-    <div ref="editorRef" class="rich-text-content" contenteditable="true" role="textbox" aria-multiline="true" :data-placeholder="placeholder" @input="syncContent" @paste="handlePaste" @blur="emit('blur')" />
+    <div ref="editorRef" class="rich-text-content" contenteditable="true" role="textbox" aria-multiline="true" :data-placeholder="placeholder" @input="syncContent" @paste="handlePaste" @click="handleMediaClick" @blur="emit('blur')" />
   </div>
 </template>

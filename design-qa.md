@@ -107,3 +107,57 @@ The implementation includes `0000-湖南海拔互联网科技有限公司` as th
 - Confirmed `npm run build` passes and the existing `4180` preview serves the latest code.
 
 final result: blocked
+
+---
+
+# Task Detail Modal QA - 2026-08-26
+
+## Comparison Target
+
+- Source visual truth: `/var/folders/3r/w_nsz4pd21x6yt6d95b8vht80000gn/T/codex-clipboard-c14bbfa3-5165-4b43-bb0d-66c5084d0bce.png`
+- Implementation URL: `http://127.0.0.1:5173/`
+- Implementation screenshot: `output/design-qa/task-detail-current.png`
+- Full comparison evidence: `output/design-qa/task-detail-comparison.png`
+- Viewport: implementation `1159 x 784`; source normalized to the same height for side-by-side review.
+- State: task detail modal open for `T-260802`; top metadata, description editor, subtasks, collaboration tabs, and footer visible.
+
+## Full-View Comparison Evidence
+
+The implementation preserves the reference's modal hierarchy: title and status in the header, a two-column metadata grid, task description, subtasks, collaboration, and a fixed footer. Borders, white surfaces, low-radius controls, neutral input borders, and Arco blue active and primary states follow the source. The task description intentionally adds the requested rich-text toolbar while retaining the reference's full-width content area.
+
+## Focused Region Evidence
+
+The metadata grid and description editor are visible in the comparison. Select affordances remain aligned at each field's right edge, selected executors render as compact tags, and the task description is an editable `contenteditable` rich-text region with formatting and attachment actions.
+
+## Findings
+
+- No actionable P0, P1, or P2 mismatches remain for the supplied task-detail reference.
+- [P3] The current selected task has no subtasks or comments, so its empty states appear where the reference shows populated rows. The existing add-subtask and comment input controls remain available; this is a data-state difference rather than a layout mismatch.
+
+## Required Fidelity Surfaces
+
+- Fonts and typography: uses the existing Chinese system stack with a clear title, compact labels, and readable body text.
+- Spacing and layout rhythm: the modal uses 24-26px internal padding, a 24px metadata column gap, controlled section separators, and fixed footer actions.
+- Colors and visual tokens: uses the existing neutral Arco input surfaces and blue primary/active states.
+- Image quality and asset fidelity: the source contains no image assets; controls use the existing Arco icon set.
+- Copy and content: all reference sections are retained, while task description adds the requested rich-text editing controls.
+
+## Patches Made
+
+- Reworked the task detail into a centered modal with a wide desktop content frame.
+- Arranged status, priority, confirmer, executor, due date, and phase in a two-column metadata grid.
+- Replaced the plain task description with the reusable rich-text editor, including formatting and media/attachment insertion controls.
+- Preserved functional subtask, comments, activity, status, and footer task-result actions.
+
+final result: passed
+
+---
+
+# Task Detail Modal Size Adjustment - 2026-08-26
+
+- Reduced the desktop task-detail modal width from `1120px` to `880px`, while retaining a responsive maximum width of `calc(100vw - 48px)`.
+- Reduced the scrollable body height to `calc(100vh - 236px)` so the modal has more vertical breathing room and the header/footer remain visible.
+- Visually verified at `1159 x 784`: the modal has clear viewport margins, metadata remains readable in two columns, and the body scrolls independently without clipping footer actions.
+- Verified with `npm run build` and `git diff --check`.
+
+final result: passed
